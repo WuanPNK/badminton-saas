@@ -38,11 +38,13 @@ export default function SuperAdminDashboard() {
     }
   };
 
-    useEffect(() => {
-    // eslint-disable-next-line
-        fetchAllData();
-    }, []);
-  // 1. Duyệt hoặc Từ chối Chủ sân
+  useEffect(() => {
+    const initData = async () => {
+      await fetchAllData();
+    };
+    initData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const handleTenantStatus = async (id, status) => {
     try {
       const res = await axiosClient.put(`/super-admin/tenants/${id}/status`, { status });
@@ -53,7 +55,6 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  // 2. Duyệt hoặc Từ chối Sân mới tạo
   const handleCourtStatus = async (id, status) => {
     try {
       const res = await axiosClient.put(`/super-admin/courts/${id}/status`, { status });
@@ -64,7 +65,6 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  // 3. Duyệt hoặc Từ chối Thẻ Học sinh / Sinh viên
   const handleStudentVerify = async (userId, status) => {
     try {
       const res = await axiosClient.put(`/super-admin/students/${userId}/verify`, { status });
@@ -75,7 +75,6 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  // 4. Ghi nhận doanh thu đóng phí phần mềm từ Chủ sân
   const handleRecordSubscription = async (e) => {
     e.preventDefault();
     try {
@@ -89,63 +88,84 @@ export default function SuperAdminDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-12">
+    <div className="min-h-screen bg-[#F8FAFC] pb-16">
       {/* HEADER */}
-      <header className="bg-slate-900 text-white px-6 py-4 flex justify-between items-center">
-        <div>
-          <h1 className="text-xl font-bold">Super Admin Portal (Chủ Nền Tảng SaaS)</h1>
-          <p className="text-xs text-slate-400">
-            Quản lý Doanh thu Phần mềm, Duyệt Đối tác Chủ sân, Duyệt Sân mới & Xác thực Sinh viên
-          </p>
-        </div>
-        <div className="flex items-center gap-4">
-          <span className="text-xs bg-emerald-600 px-3 py-1 rounded-full font-bold">
-            {user?.fullName} (SUPER ADMIN)
-          </span>
-          <button
-            onClick={() => { logout(); navigate('/'); }}
-            className="text-xs bg-red-600 hover:bg-red-700 px-3 py-1.5 rounded-lg font-semibold"
-          >
-            Đăng xuất
-          </button>
+      <header className="bg-slate-900 text-white px-6 py-5 shadow-md">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+          <div>
+            <span className="text-[10px] font-extrabold uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2.5 py-0.5 rounded-full">
+              Platform Control Center
+            </span>
+            <h1 className="text-2xl font-black tracking-tight mt-1">Super Admin Portal</h1>
+            <p className="text-xs text-slate-400">
+              Quản lý Doanh thu Gói cước SaaS, Duyệt Kép Chủ sân / Sân mới & Xác thực Thẻ Sinh viên
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-xs bg-white/10 px-3.5 py-1.5 rounded-full font-bold">
+              👑 {user?.fullName}
+            </span>
+            <button
+              onClick={() => { logout(); navigate('/'); }}
+              className="text-xs bg-red-600 hover:bg-red-700 px-3.5 py-2 rounded-xl font-bold transition"
+            >
+              Đăng xuất
+            </button>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 pt-6 space-y-6">
-        {/* KHỐI 1: THỐNG KÊ DOANH THU BÁN PHẦN MỀM SAAS */}
-        <div className="grid md:grid-cols-3 gap-4">
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500">TỔNG DOANH THU GÓI CƯỚC SAAS</p>
-            <p className="text-2xl font-extrabold text-emerald-600 mt-1">
-              {Number(dashboard.saasRevenue?.total_saas_revenue || 0).toLocaleString()}đ
-            </p>
-            <p className="text-xs text-slate-500 mt-1">
-              Tổng số hợp đồng thuê phần mềm: {dashboard.saasRevenue?.total_subscriptions || 0}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6 space-y-6">
+        {/* KHỐI 1: THỐNG KÊ & GHI NHẬN HỢP ĐỒNG SAAS */}
+        <div className="grid lg:grid-cols-3 gap-6">
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm flex flex-col justify-between">
+            <div>
+              <p className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
+                Tổng Doanh Thu Gói Cước SaaS
+              </p>
+              <p className="text-3xl font-black text-emerald-600 mt-2">
+                {Number(dashboard.saasRevenue?.total_saas_revenue || 0).toLocaleString()} ₫
+              </p>
+            </div>
+            <p className="text-xs text-slate-500 mt-4 pt-3 border-t border-slate-100">
+              Tổng số hợp đồng thuê phần mềm đã thanh toán: <strong>{dashboard.saasRevenue?.total_subscriptions || 0}</strong>
             </p>
           </div>
 
-          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-            <p className="text-xs font-semibold text-slate-500">HỒ SƠ ĐANG CHỜ DUYỆT</p>
-            <div className="mt-2 space-y-1 text-xs font-medium text-slate-700">
-              <div>• Chủ sân mới chờ duyệt: <strong>{approvals.pendingTenants.length}</strong></div>
-              <div>• Sân con mới chờ mở bán: <strong>{approvals.pendingCourts.length}</strong></div>
-              <div>• Thẻ Sinh viên chờ xác thực: <strong>{approvals.pendingStudents.length}</strong></div>
+          <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+            <p className="text-xs font-extrabold uppercase tracking-wider text-slate-400 mb-3">
+              Hồ Sơ Đang Chờ Phê Duyệt
+            </p>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl">
+                <span className="font-semibold text-slate-700">🏟️ Chủ sân mới chờ duyệt</span>
+                <strong className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">{approvals.pendingTenants.length}</strong>
+              </div>
+              <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl">
+                <span className="font-semibold text-slate-700">🏸 Sân con mới chờ mở bán</span>
+                <strong className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">{approvals.pendingCourts.length}</strong>
+              </div>
+              <div className="flex justify-between items-center p-2.5 bg-slate-50 rounded-xl">
+                <span className="font-semibold text-slate-700">🎓 Thẻ Sinh viên chờ xác thực</span>
+                <strong className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full">{approvals.pendingStudents.length}</strong>
+              </div>
             </div>
           </div>
 
-          {/* FORM GHI NHẬN THU TIỀN PHẦN MỀM TỪ CHỦ SÂN */}
           <form
             onSubmit={handleRecordSubscription}
-            className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2"
+            className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm space-y-3"
           >
-            <p className="text-xs font-bold text-slate-800">Ghi nhận Chủ sân đóng phí SaaS</p>
+            <p className="text-xs font-extrabold uppercase tracking-wider text-slate-800">
+              Ghi nhận Chủ sân đóng phí SaaS
+            </p>
             <input
               type="text"
               required
               placeholder="Nhập UUID của Cụm sân (Tenant ID)..."
               value={subForm.tenantId}
               onChange={(e) => setSubForm({ ...subForm, tenantId: e.target.value })}
-              className="w-full px-2.5 py-1.5 border rounded text-xs"
+              className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono"
             />
             <div className="grid grid-cols-2 gap-2">
               <input
@@ -154,7 +174,7 @@ export default function SuperAdminDashboard() {
                 placeholder="Giá/tháng"
                 value={subForm.pricePerMonth}
                 onChange={(e) => setSubForm({ ...subForm, pricePerMonth: e.target.value })}
-                className="w-full px-2.5 py-1.5 border rounded text-xs"
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
               />
               <input
                 type="number"
@@ -162,51 +182,60 @@ export default function SuperAdminDashboard() {
                 placeholder="Số tháng"
                 value={subForm.durationMonths}
                 onChange={(e) => setSubForm({ ...subForm, durationMonths: e.target.value })}
-                className="w-full px-2.5 py-1.5 border rounded text-xs"
+                className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs"
               />
             </div>
             <button
               type="submit"
-              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-1.5 rounded text-xs font-semibold"
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl text-xs font-bold transition"
             >
               + Ghi nhận Doanh thu SaaS
             </button>
           </form>
         </div>
 
-        {/* KHỐI 2: DUYỆT KÉP BƯỚC 1 - DUYỆT TÀI KHOẢN CHỦ SÂN (PENDING -> ACTIVE) */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <h2 className="text-base font-bold text-slate-800 mb-3">
+        {/* KHỐI 2: DUYỆT CHỦ SÂN */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <h2 className="text-base font-extrabold text-slate-900 mb-4">
             1. Duyệt Hồ sơ Đăng ký Chủ sân Mới ({approvals.pendingTenants.length})
           </h2>
           {approvals.pendingTenants.length === 0 ? (
-            <p className="text-xs text-slate-500">Không có Chủ sân nào đang chờ duyệt.</p>
+            <p className="text-xs text-slate-400">Không có Chủ sân nào đang chờ duyệt.</p>
           ) : (
             <div className="space-y-3">
               {approvals.pendingTenants.map((t) => (
                 <div
                   key={t.id}
-                  className="p-3 border rounded-lg flex flex-wrap justify-between items-center gap-3 bg-slate-50"
+                  className="p-4 border border-slate-100 rounded-2xl flex flex-wrap justify-between items-center gap-4 bg-slate-50"
                 >
                   <div className="text-xs space-y-1">
-                    <div className="font-bold text-sm text-slate-900">
-                      {t.name} (Quận {t.district})
+                    <div className="font-extrabold text-sm text-slate-900">
+                      {t.name} <span className="text-emerald-700">(Quận {t.district})</span>
                     </div>
-                    <div>
-                      Chủ sở hữu: <strong>{t.owner_name}</strong> ({t.owner_email}) - SĐT: {t.phone_contact}
+                    <div className="text-slate-600">
+                      Chủ sở hữu: <strong>{t.owner_name}</strong> ({t.owner_email}) — SĐT: {t.phone_contact}
                     </div>
-                    <div>Địa chỉ: {t.address} | Tenant UUID: <span className="font-mono">{t.id}</span></div>
+                    <div className="text-slate-500 flex items-center gap-2">
+                      <span>📍 {t.address} • UUID: <code className="bg-white border px-1.5 py-0.5 rounded">{t.id}</code></span>
+                      <button
+                        type="button"
+                        onClick={() => setSubForm({ ...subForm, tenantId: t.id })}
+                        className="text-emerald-600 font-bold hover:underline"
+                      >
+                        [Điền vào ô thu phí]
+                      </button>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleTenantStatus(t.id, 'ACTIVE')}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition"
                     >
                       ✓ Duyệt mở khóa (ACTIVE)
                     </button>
                     <button
                       onClick={() => handleTenantStatus(t.id, 'REJECTED')}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition"
                     >
                       ✕ Từ chối
                     </button>
@@ -217,23 +246,23 @@ export default function SuperAdminDashboard() {
           )}
         </div>
 
-        {/* KHỐI 3: DUYỆT KÉP BƯỚC 2 - DUYỆT SÂN MỚI DO CHỦ SÂN TẠO (PENDING -> PUBLISHED) */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <h2 className="text-base font-bold text-slate-800 mb-3">
+        {/* KHỐI 3: DUYỆT SÂN MỚI */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <h2 className="text-base font-extrabold text-slate-900 mb-4">
             2. Duyệt Sân Mới Tạo Để Mở Bán Lên Sàn ({approvals.pendingCourts.length})
           </h2>
           {approvals.pendingCourts.length === 0 ? (
-            <p className="text-xs text-slate-500">Không có sân mới nào đang chờ duyệt.</p>
+            <p className="text-xs text-slate-400">Không có sân mới nào đang chờ duyệt.</p>
           ) : (
             <div className="space-y-3">
               {approvals.pendingCourts.map((c) => (
                 <div
                   key={c.id}
-                  className="p-3 border rounded-lg flex justify-between items-center bg-slate-50"
+                  className="p-4 border border-slate-100 rounded-2xl flex flex-wrap justify-between items-center gap-4 bg-slate-50"
                 >
                   <div className="text-xs">
-                    <span className="font-bold text-sm text-slate-800">{c.name}</span>{' '}
-                    <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">
+                    <span className="font-extrabold text-sm text-slate-900">{c.name}</span>{' '}
+                    <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-bold ml-1">
                       Loại: {c.type}
                     </span>
                     <p className="text-slate-600 mt-1">
@@ -243,13 +272,13 @@ export default function SuperAdminDashboard() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleCourtStatus(c.id, 'PUBLISHED')}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition"
                     >
                       ✓ Duyệt lên sàn (PUBLISHED)
                     </button>
                     <button
                       onClick={() => handleCourtStatus(c.id, 'REJECTED')}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition"
                     >
                       ✕ Từ chối
                     </button>
@@ -260,45 +289,45 @@ export default function SuperAdminDashboard() {
           )}
         </div>
 
-        {/* KHỐI 4: DUYỆT THẺ HỌC SINH / SINH VIÊN CHO KHÁCH HÀNG */}
-        <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-          <h2 className="text-base font-bold text-slate-800 mb-3">
+        {/* KHỐI 4: DUYỆT THẺ SINH VIÊN */}
+        <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+          <h2 className="text-base font-extrabold text-slate-900 mb-4">
             3. Duyệt Xác Thực Thẻ Học Sinh / Sinh Viên ({approvals.pendingStudents.length})
           </h2>
           {approvals.pendingStudents.length === 0 ? (
-            <p className="text-xs text-slate-500">Không có yêu cầu xác thực thẻ Sinh viên nào.</p>
+            <p className="text-xs text-slate-400">Không có yêu cầu xác thực thẻ Sinh viên nào.</p>
           ) : (
             <div className="space-y-3">
               {approvals.pendingStudents.map((st) => (
                 <div
                   key={st.id}
-                  className="p-3 border rounded-lg flex flex-wrap justify-between items-center gap-3 bg-slate-50"
+                  className="p-4 border border-slate-100 rounded-2xl flex flex-wrap justify-between items-center gap-4 bg-slate-50"
                 >
                   <div className="text-xs space-y-1">
-                    <div className="font-bold text-sm text-slate-800">{st.full_name}</div>
-                    <div>Email: {st.email} | SĐT: {st.phone}</div>
+                    <div className="font-extrabold text-sm text-slate-900">{st.full_name}</div>
+                    <div className="text-slate-600">Email: {st.email} • SĐT: {st.phone}</div>
                     <div>
                       Ảnh thẻ SV:{' '}
                       <a
                         href={st.student_card_url}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-blue-600 underline font-semibold"
+                        className="text-emerald-600 underline font-bold"
                       >
-                        {st.student_card_url || 'Xem ảnh thẻ'}
+                        {st.student_card_url || 'Mở xem ảnh thẻ'}
                       </a>
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleStudentVerify(st.id, 'VERIFIED')}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition"
                     >
                       🎓 Xác thực Sinh viên (VERIFIED)
                     </button>
                     <button
                       onClick={() => handleStudentVerify(st.id, 'REJECTED')}
-                      className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded text-xs font-semibold"
+                      className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition"
                     >
                       ✕ Từ chối
                     </button>

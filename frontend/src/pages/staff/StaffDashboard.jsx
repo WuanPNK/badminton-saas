@@ -7,7 +7,7 @@ export default function StaffDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
-  const [tab, setTab] = useState('OPERATIONS'); // 'OPERATIONS' | 'REFUNDS' | 'POS'
+  const [tab, setTab] = useState('OPERATIONS');
   const [tenant, setTenant] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
   const [timeline, setTimeline] = useState({ courts: [], bookings: [] });
@@ -15,7 +15,6 @@ export default function StaffDashboard() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
 
-  // Form tạo Vé Vãng lai / Vé Sự kiện
   const [staffBooking, setStaffBooking] = useState({
     courtId: '',
     bookingType: 'WALK_IN',
@@ -52,13 +51,13 @@ export default function StaffDashboard() {
     }
   };
 
-// eslint-disable-next-line
   useEffect(() => {
-    // eslint-disable-next-line
-    loadInitial();
-  // eslint-disable-next-line
+    const initData = async () => {
+      await loadInitial();
+    };
+    initData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDate]);
-  // Lễ tân tạo Vé Vãng lai (WALK_IN) hoặc Vé Sự kiện (EVENT)
   const handleCreateStaffBooking = async (e) => {
     e.preventDefault();
     try {
@@ -84,7 +83,6 @@ export default function StaffDashboard() {
     }
   };
 
-  // Lễ tân bấm Check-in hoặc Hoàn tất ca chơi (COMPLETE -> Mở khóa đánh giá sân cho khách)
   const handleOperation = async (bookingId, action) => {
     try {
       const res = await axiosClient.put(`/bookings/${bookingId}/operation`, { action });
@@ -95,7 +93,6 @@ export default function StaffDashboard() {
     }
   };
 
-  // Lễ tân bấm "Đã hoàn tiền" sau khi chuyển khoản thủ công trên điện thoại
   const handleConfirmRefunded = async (bookingId) => {
     try {
       const res = await axiosClient.put(`/payments/${bookingId}/confirm-refund`);
@@ -106,7 +103,6 @@ export default function StaffDashboard() {
     }
   };
 
-  // Thêm món vào giỏ POS & Thanh toán trừ kho
   const addToCart = (prod) => {
     setCart((prev) => {
       const found = prev.find((i) => i.productId === prod.id);
@@ -115,6 +111,14 @@ export default function StaffDashboard() {
       }
       return [...prev, { productId: prod.id, name: prod.name, price: prod.price, quantity: 1 }];
     });
+  };
+
+  const updateCartQty = (productId, delta) => {
+    setCart((prev) =>
+      prev
+        .map((item) => (item.productId === productId ? { ...item, quantity: item.quantity + delta } : item))
+        .filter((item) => item.quantity > 0)
+    );
   };
 
   const handleCheckoutPos = async () => {
@@ -131,265 +135,398 @@ export default function StaffDashboard() {
     }
   };
 
-  if (!tenant) return <div className="p-8 text-center text-sm">Đang tải màn hình Lễ tân...</div>;
+  if (!tenant) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-8 h-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-12">
-      <header className="bg-slate-800 text-white px-6 py-4 flex justify-between items-center">
-        <div>
-          <h1 className="text-lg font-bold">Quầy Lễ Tân & POS — {tenant.name}</h1>
-          <p className="text-xs text-slate-300">Nhân viên trực: {user?.fullName} ({user?.role})</p>
-        </div>
-        <div className="flex gap-3">
-          {user?.role === 'TENANT_ADMIN' && (
+    <div className="min-h-screen bg-[#F8FAFC] pb-16">
+      {/* HEADER QUẦY LỄ TÂN */}
+      <header className="bg-slate-900 text-white px-6 py-4 shadow-md">
+        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+          <div className="flex items-center gap-3">
+            <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
+            <div>
+              <h1 className="text-lg font-extrabold tracking-tight">Quầy Lễ Tân & POS — {tenant.name}</h1>
+              <p className="text-xs text-slate-400">
+                Nhân viên ca trực: <strong className="text-slate-200">{user?.fullName}</strong> ({user?.role})
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2.5">
+            {user?.role === 'TENANT_ADMIN' && (
+              <button
+                onClick={() => navigate('/tenant')}
+                className="bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 rounded-xl text-xs font-bold transition"
+              >
+                ← Về Quản trị Chủ sân
+              </button>
+            )}
             <button
-              onClick={() => navigate('/tenant')}
-              className="bg-emerald-600 px-3 py-1.5 rounded text-xs font-bold"
+              onClick={() => { logout(); navigate('/'); }}
+              className="bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-400/30 px-3.5 py-2 rounded-xl text-xs font-bold transition"
             >
-              ← Về Quản trị Chủ sân
+              Đăng xuất
             </button>
-          )}
-          <button
-            onClick={() => { logout(); navigate('/'); }}
-            className="bg-red-600 px-3 py-1.5 rounded text-xs font-bold"
-          >
-            Đăng xuất
-          </button>
+          </div>
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-6 pt-6">
-        <div className="flex gap-2 border-b pb-3">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+        {/* TABS */}
+        <div className="flex flex-wrap gap-2 bg-white p-2 rounded-2xl shadow-sm border border-slate-100 mb-6">
           <button
             onClick={() => setTab('OPERATIONS')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === 'OPERATIONS' ? 'bg-slate-900 text-white' : 'bg-white border'}`}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+              tab === 'OPERATIONS' ? 'bg-slate-900 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+            }`}
           >
-            1. Trực Lịch Sân & Tạo Vé Vãng Lai / Sự Kiện
+            📅 1. Trực Lịch Sân & Tạo Vé Vãng Lai / Sự Kiện
           </button>
           <button
             onClick={() => setTab('REFUNDS')}
-            className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === 'REFUNDS' ? 'bg-red-600 text-white' : 'bg-white border'}`}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+              tab === 'REFUNDS' ? 'bg-red-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+            }`}
           >
-            2. Yêu cầu Hoàn tiền ({refundRequests.length})
+            <span>↩ 2. Yêu cầu Hoàn tiền</span>
+            {refundRequests.length > 0 && (
+              <span className="bg-red-100 text-red-700 px-2 py-0.5 rounded-full text-[10px] font-extrabold">
+                {refundRequests.length}
+              </span>
+            )}
           </button>
           {tenant.enable_pos_module && (
             <button
               onClick={() => setTab('POS')}
-              className={`px-4 py-2 rounded-lg text-xs font-bold ${tab === 'POS' ? 'bg-emerald-700 text-white' : 'bg-white border'}`}
+              className={`px-4 py-2.5 rounded-xl text-xs font-bold transition ${
+                tab === 'POS' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'
+              }`}
             >
-              3. Bán Hàng POS Tại Quầy
+              🛒 3. Bán Hàng POS Tại Quầy
             </button>
           )}
         </div>
 
-        {/* TAB 1: TRỰC SÂN & TẠO VÉ VÃNG LAI / SỰ KIỆN */}
+        {/* TAB 1: TRỰC SÂN & TẠO VÉ */}
         {tab === 'OPERATIONS' && (
-          <div className="grid lg:grid-cols-3 gap-6 py-6">
-            {/* CỘT TRÁI: DANH SÁCH CA ĐẶT TRONG NGÀY */}
-            <div className="lg:col-span-2 bg-white p-5 rounded-xl border space-y-4">
-              <div className="flex justify-between items-center">
-                <h2 className="font-bold text-slate-800">Lịch đặt sân trong ngày</h2>
+          <div className="grid lg:grid-cols-12 gap-6 items-start">
+            {/* DANH SÁCH CA ĐẶT */}
+            <div className="lg:col-span-8 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+              <div className="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-slate-100">
+                <div>
+                  <h2 className="font-extrabold text-slate-900 text-base">Danh sách ca chơi trong ngày</h2>
+                  <p className="text-xs text-slate-500">Check-in khách đến sân và xác nhận hoàn tất ca chơi</p>
+                </div>
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3 py-1.5 border rounded text-xs"
+                  className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
               <div className="space-y-3">
-                {timeline.bookings.map((b) => (
-                  <div
-                    key={b.id}
-                    className="p-3 border rounded-lg bg-slate-50 flex flex-wrap justify-between items-center gap-3 text-xs"
-                  >
-                    <div>
-                      <span className="font-bold text-slate-900">#{b.booking_code}</span> — Loại vé:{' '}
-                      <strong className="text-emerald-700">{b.booking_type}</strong> — Trạng thái:{' '}
-                      <strong>{b.status}</strong>
-                      <p className="text-slate-600 mt-1">
-                        Khung giờ: {new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} →{' '}
-                        {new Date(b.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                        {b.walk_in_guest_name && ` | Khách: ${b.walk_in_guest_name}`}
-                      </p>
-                    </div>
-                    {b.status === 'CONFIRMED' && (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => handleOperation(b.id, 'CHECK_IN')}
-                          className="bg-blue-600 text-white px-3 py-1.5 rounded font-semibold"
-                        >
-                          Khách Check-in
-                        </button>
-                        <button
-                          onClick={() => handleOperation(b.id, 'COMPLETE')}
-                          className="bg-emerald-600 text-white px-3 py-1.5 rounded font-semibold"
-                        >
-                          ✓ Hoàn tất ca chơi (COMPLETED)
-                        </button>
+                {timeline.bookings.map((b) => {
+                  const courtObj = timeline.courts.find((c) => c.id === b.court_id);
+                  return (
+                    <div
+                      key={b.id}
+                      className="p-4 border border-slate-100 rounded-2xl bg-slate-50/70 hover:bg-white hover:shadow-sm transition flex flex-wrap justify-between items-center gap-4 text-xs"
+                    >
+                      <div className="space-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono font-extrabold text-slate-900 bg-white border px-2 py-0.5 rounded">
+                            #{b.booking_code}
+                          </span>
+                          <span className="font-bold text-slate-800">
+                            {courtObj ? courtObj.name : 'Sân'}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                            b.booking_type === 'EVENT'
+                              ? 'bg-purple-100 text-purple-800'
+                              : b.booking_type === 'WALK_IN'
+                              ? 'bg-amber-100 text-amber-800'
+                              : 'bg-emerald-100 text-emerald-800'
+                          }`}>
+                            {b.booking_type}
+                          </span>
+                          <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
+                            b.status === 'COMPLETED'
+                              ? 'bg-blue-100 text-blue-800'
+                              : b.status === 'CONFIRMED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-200 text-slate-700'
+                          }`}>
+                            {b.status}
+                          </span>
+                        </div>
+                        <p className="text-slate-600 font-medium pt-0.5">
+                          🕒 {new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} →{' '}
+                          {new Date(b.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          {b.walk_in_guest_name && <span className="ml-2 text-slate-800 font-semibold">• Khách: {b.walk_in_guest_name}</span>}
+                        </p>
                       </div>
-                    )}
-                  </div>
-                ))}
+
+                      {b.status === 'CONFIRMED' && (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleOperation(b.id, 'CHECK_IN')}
+                            className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-bold transition shadow-sm"
+                          >
+                            📍 Khách Check-in
+                          </button>
+                          <button
+                            onClick={() => handleOperation(b.id, 'COMPLETE')}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-bold transition shadow-sm"
+                          >
+                            ✓ Hoàn tất ca
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
                 {timeline.bookings.length === 0 && (
-                  <p className="text-xs text-slate-500">Chưa có ca đặt sân nào trong ngày này.</p>
+                  <div className="text-center py-10 text-slate-400 text-xs">
+                    Chưa có ca đặt sân nào trong ngày {selectedDate}.
+                  </div>
                 )}
               </div>
             </div>
 
-            {/* CỘT PHẢI: FORM TẠO VÉ VÃNG LAI / SỰ KIỆN */}
+            {/* FORM TẠO VÉ VÃNG LAI / SỰ KIỆN */}
             <form
               onSubmit={handleCreateStaffBooking}
-              className="bg-white p-5 rounded-xl border space-y-3"
+              className="lg:col-span-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 lg:sticky lg:top-4"
             >
-              <h2 className="font-bold text-slate-800">Tạo Vé Vãng Lai / Vé Sự Kiện</h2>
               <div>
-                <label className="block text-xs font-semibold mb-1">Loại vé khởi tạo</label>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-600 bg-amber-50 px-2.5 py-1 rounded-full">
+                  Dành cho Lễ tân
+                </span>
+                <h2 className="font-extrabold text-slate-900 text-base mt-2">Tạo Vé Vãng Lai / Sự Kiện</h2>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Loại vé khởi tạo</label>
                 <select
                   value={staffBooking.bookingType}
                   onChange={(e) => setStaffBooking({ ...staffBooking, bookingType: e.target.value })}
-                  className="w-full px-3 py-2 border rounded text-xs"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
                 >
-                  <option value="WALK_IN">Vé Vãng Lai (WALK_IN)</option>
-                  <option value="EVENT">Vé Sự Kiện / Giải Đấu (EVENT)</option>
+                  <option value="WALK_IN">🤝 Vé Vãng Lai (WALK_IN)</option>
+                  <option value="EVENT">🏆 Vé Sự Kiện / Giải Đấu (EVENT)</option>
                 </select>
               </div>
+
               <div>
-                <label className="block text-xs font-semibold mb-1">Chọn Sân</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Chọn Sân</label>
                 <select
                   value={staffBooking.courtId}
                   onChange={(e) => setStaffBooking({ ...staffBooking, courtId: e.target.value })}
-                  className="w-full px-3 py-2 border rounded text-xs"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
                 >
                   {timeline.courts.map((c) => (
                     <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
                   ))}
                 </select>
               </div>
-              <input
-                type="text"
-                required
-                placeholder="Tên khách / Tên giải đấu sự kiện"
-                value={staffBooking.guestName}
-                onChange={(e) => setStaffBooking({ ...staffBooking, guestName: e.target.value })}
-                className="w-full px-3 py-2 border rounded text-xs"
-              />
-              <input
-                type="text"
-                placeholder="Số điện thoại liên hệ"
-                value={staffBooking.guestPhone}
-                onChange={(e) => setStaffBooking({ ...staffBooking, guestPhone: e.target.value })}
-                className="w-full px-3 py-2 border rounded text-xs"
-              />
-              <div className="grid grid-cols-2 gap-2">
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Tên khách / Tên giải đấu</label>
                 <input
-                  type="time"
-                  step="1800"
-                  value={staffBooking.startTime}
-                  onChange={(e) => setStaffBooking({ ...staffBooking, startTime: e.target.value })}
-                  className="px-3 py-2 border rounded text-xs"
-                />
-                <input
-                  type="time"
-                  step="1800"
-                  value={staffBooking.endTime}
-                  onChange={(e) => setStaffBooking({ ...staffBooking, endTime: e.target.value })}
-                  className="px-3 py-2 border rounded text-xs"
+                  type="text"
+                  required
+                  placeholder="Nhập tên khách hoặc sự kiện..."
+                  value={staffBooking.guestName}
+                  onChange={(e) => setStaffBooking({ ...staffBooking, guestName: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
                 />
               </div>
-              <input
-                type="number"
-                placeholder="Giá trọn gói (Để trống nếu tính tự động)"
-                value={staffBooking.customPrice}
-                onChange={(e) => setStaffBooking({ ...staffBooking, customPrice: e.target.value })}
-                className="w-full px-3 py-2 border rounded text-xs"
-              />
-              <button className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold py-2.5 rounded text-xs">
-                + Khởi tạo Lịch Vãng Lai / Sự Kiện
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Số điện thoại liên hệ</label>
+                <input
+                  type="text"
+                  placeholder="09xxx..."
+                  value={staffBooking.guestPhone}
+                  onChange={(e) => setStaffBooking({ ...staffBooking, guestPhone: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Giờ bắt đầu</label>
+                  <input
+                    type="time"
+                    step="1800"
+                    value={staffBooking.startTime}
+                    onChange={(e) => setStaffBooking({ ...staffBooking, startTime: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Giờ kết thúc</label>
+                  <input
+                    type="time"
+                    step="1800"
+                    value={staffBooking.endTime}
+                    onChange={(e) => setStaffBooking({ ...staffBooking, endTime: e.target.value })}
+                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Giá thỏa thuận (Để trống = Tính tự động)</label>
+                <input
+                  type="number"
+                  placeholder="VD: 200000"
+                  value={staffBooking.customPrice}
+                  onChange={(e) => setStaffBooking({ ...staffBooking, customPrice: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                />
+              </div>
+
+              <button className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold py-3 rounded-xl text-xs transition shadow-sm">
+                + Khởi tạo Lịch Trực Tiếp
               </button>
             </form>
           </div>
         )}
 
-        {/* TAB 2: XỬ LÝ YÊU CẦU HOÀN TIỀN THỦ CÔNG (PENDING_REFUND -> REFUNDED) */}
+        {/* TAB 2: HOÀN TIỀN */}
         {tab === 'REFUNDS' && (
-          <div className="py-6 bg-white p-5 rounded-xl border space-y-4">
-            <h2 className="font-bold text-slate-800">
-              Danh sách Khách hủy trước 24h chờ Hoàn tiền 100% (PENDING_REFUND)
-            </h2>
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+            <div>
+              <h2 className="font-extrabold text-slate-900 text-base">
+                Danh sách Khách hủy trước 24h chờ Hoàn tiền 100%
+              </h2>
+              <p className="text-xs text-slate-500">
+                Lễ tân chuyển khoản theo thông tin ngân hàng bên dưới rồi bấm xác nhận hoàn tất.
+              </p>
+            </div>
+
             {refundRequests.length === 0 ? (
-              <p className="text-xs text-slate-500">Hiện không có yêu cầu hoàn tiền nào.</p>
+              <div className="text-center py-12 text-xs text-slate-400">
+                🎉 Hiện không có yêu cầu hoàn tiền nào tồn đọng.
+              </div>
             ) : (
-              refundRequests.map((r) => (
-                <div
-                  key={r.id}
-                  className="p-4 border border-red-200 bg-red-50 rounded-xl flex flex-wrap justify-between items-center gap-4 text-xs"
-                >
-                  <div className="space-y-1">
-                    <div className="font-bold text-sm text-red-900">
-                      Đơn #{r.booking_code} — Khách: {r.customer_name} ({r.customer_phone})
-                    </div>
-                    <div>
-                      Số tiền cần hoàn 100%: <strong className="text-red-700 text-sm">{Number(r.final_price).toLocaleString()}đ</strong>
-                    </div>
-                    <div className="bg-white p-2 rounded border border-red-200 font-semibold text-slate-800">
-                      Ngân hàng nhận hoàn: {r.refund_bank_name} | STK: {r.refund_account_number} | Chủ TK: {r.refund_account_name}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => handleConfirmRefunded(r.id)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-lg font-bold"
+              <div className="space-y-3">
+                {refundRequests.map((r) => (
+                  <div
+                    key={r.id}
+                    className="p-5 border border-red-200/80 bg-red-50/40 rounded-2xl flex flex-wrap justify-between items-center gap-4 text-xs"
                   >
-                    ✓ Đã chuyển khoản hoàn tiền (Đổi sang REFUNDED)
-                  </button>
-                </div>
-              ))
+                    <div className="space-y-1.5">
+                      <div className="font-extrabold text-sm text-slate-900">
+                        Đơn #{r.booking_code} — Khách: {r.customer_name} ({r.customer_phone})
+                      </div>
+                      <div className="text-slate-600">
+                        Số tiền cần hoàn 100%: <strong className="text-red-600 text-base font-black">{Number(r.final_price).toLocaleString()} ₫</strong>
+                      </div>
+                      <div className="bg-white px-3.5 py-2 rounded-xl border border-red-200 font-bold text-slate-800 inline-block">
+                        🏦 {r.refund_bank_name} • STK: <span className="font-mono text-emerald-700 select-all">{r.refund_account_number}</span> • Chủ TK: {r.refund_account_name}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleConfirmRefunded(r.id)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-xl font-bold transition shadow-sm"
+                    >
+                      ✓ Xác nhận Đã chuyển khoản hoàn tiền
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
 
-        {/* TAB 3: BÁN HÀNG POS TẠI QUẦY */}
+        {/* TAB 3: BÁN HÀNG POS */}
         {tab === 'POS' && tenant.enable_pos_module && (
-          <div className="py-6 grid md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid lg:grid-cols-12 gap-6 items-start">
+            <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 gap-4">
               {products.map((p) => (
                 <button
                   key={p.id}
                   onClick={() => addToCart(p)}
-                  className="bg-white p-4 rounded-xl border hover:border-emerald-600 text-left flex flex-col justify-between"
+                  disabled={p.stock_quantity <= 0}
+                  className="bg-white p-5 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md hover:border-emerald-500 disabled:opacity-50 text-left flex flex-col justify-between transition group"
                 >
                   <div>
-                    <span className="text-[10px] bg-slate-100 px-2 py-0.5 rounded font-bold">{p.category}</span>
-                    <h3 className="font-bold text-sm text-slate-800 mt-1">{p.name}</h3>
+                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-extrabold">
+                      {p.category === 'DRINK' ? '🥤 NƯỚC UỐNG' : p.category === 'SHUTTLECOCK' ? '🏸 CẦU LÔNG' : '🎾 THUÊ VỢT'}
+                    </span>
+                    <h3 className="font-extrabold text-sm text-slate-900 mt-2.5 group-hover:text-emerald-700 transition">
+                      {p.name}
+                    </h3>
                   </div>
-                  <div className="mt-3 flex justify-between items-center text-xs">
-                    <strong className="text-emerald-700">{Number(p.price).toLocaleString()}đ</strong>
-                    <span className="text-slate-500">Kho: {p.stock_quantity}</span>
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center text-xs">
+                    <strong className="text-emerald-700 text-sm font-black">{Number(p.price).toLocaleString()} ₫</strong>
+                    <span className="text-slate-400 font-medium">Kho: {p.stock_quantity}</span>
                   </div>
                 </button>
               ))}
             </div>
 
-            <div className="bg-white p-5 rounded-xl border space-y-4">
-              <h2 className="font-bold text-slate-800">Hóa đơn POS tại quầy</h2>
-              <div className="space-y-2 text-xs">
-                {cart.map((c) => (
-                  <div key={c.productId} className="flex justify-between border-b pb-1">
-                    <span>{c.name} x {c.quantity}</span>
-                    <strong>{(c.price * c.quantity).toLocaleString()}đ</strong>
-                  </div>
-                ))}
+            <div className="lg:col-span-4 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 lg:sticky lg:top-4">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+                <h2 className="font-extrabold text-slate-900 text-base">Hóa đơn POS tại quầy</h2>
+                {cart.length > 0 && (
+                  <button onClick={() => setCart([])} className="text-[11px] text-red-500 font-bold hover:underline">
+                    Xóa giỏ
+                  </button>
+                )}
               </div>
-              <div className="flex justify-between font-bold text-sm pt-2 border-t">
-                <span>Tổng cộng:</span>
-                <span className="text-emerald-700">
-                  {cart.reduce((sum, i) => sum + i.price * i.quantity, 0).toLocaleString()}đ
+
+              <div className="space-y-2.5 text-xs max-h-72 overflow-y-auto">
+                {cart.length === 0 ? (
+                  <p className="text-slate-400 text-center py-8">Bấm vào sản phẩm bên trái để thêm vào hóa đơn.</p>
+                ) : (
+                  cart.map((c) => (
+                    <div key={c.productId} className="flex justify-between items-center bg-slate-50 p-3 rounded-2xl">
+                      <div>
+                        <p className="font-bold text-slate-800">{c.name}</p>
+                        <p className="text-slate-400">{Number(c.price).toLocaleString()} ₫ / món</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => updateCartQty(c.productId, -1)}
+                          className="w-6 h-6 rounded-lg bg-white border font-bold text-slate-600 hover:bg-slate-100"
+                        >
+                          -
+                        </button>
+                        <span className="font-extrabold w-5 text-center">{c.quantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => updateCartQty(c.productId, 1)}
+                          className="w-6 h-6 rounded-lg bg-white border font-bold text-slate-600 hover:bg-slate-100"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="flex justify-between items-end pt-3 border-t border-slate-100">
+                <span className="text-xs font-bold text-slate-400 uppercase">Tổng cộng</span>
+                <span className="text-2xl font-black text-emerald-700">
+                  {cart.reduce((sum, i) => sum + i.price * i.quantity, 0).toLocaleString()} ₫
                 </span>
               </div>
+
               <button
                 onClick={handleCheckoutPos}
                 disabled={cart.length === 0}
-                className="w-full bg-emerald-600 disabled:bg-slate-300 text-white font-bold py-2.5 rounded-lg text-xs"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-3.5 rounded-xl text-xs transition shadow-sm"
               >
                 Thanh toán & Trừ Tồn Kho
               </button>
