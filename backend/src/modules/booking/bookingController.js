@@ -57,13 +57,16 @@ exports.previewBookingPrice = async (req, res) => {
     const tenantRes = await db.query(`SELECT * FROM tenants WHERE id = $1 AND status = 'ACTIVE'`, [tenantId]);
     const courtRes = await db.query(`SELECT * FROM courts WHERE id = $1 AND tenant_id = $2`, [courtId, tenantId]);
     const rulesRes = await db.query(`SELECT * FROM pricing_rules WHERE tenant_id = $1`, [tenantId]);
-    const userRes = await db.query(`SELECT student_status FROM users WHERE id = $1`, [req.user.id]);
 
     if (tenantRes.rows.length === 0 || courtRes.rows.length === 0) {
       return res.status(404).json({ message: 'Không tìm thấy thông tin sân.' });
     }
 
-    const isVerifiedStudent = userRes.rows[0]?.student_status === 'VERIFIED';
+    let isVerifiedStudent = false;
+    if (req.user?.id) {
+      const userRes = await db.query(`SELECT student_status FROM users WHERE id = $1`, [req.user.id]);
+      isVerifiedStudent = userRes.rows[0]?.student_status === 'VERIFIED';
+    }
 
     const priceDetails = calculateBookingPrice({
       start: checkBlock.start,
@@ -85,7 +88,6 @@ exports.previewBookingPrice = async (req, res) => {
   }
 };
 
-// 3. KHÁCH HÀNG ĐẶT SÂN TRỰC QUAN ONLINE (VISUAL BOOKING)
 exports.createVisualBooking = async (req, res) => {
   const { tenantId, courtId, bookingDate, startTime, endTime } = req.body;
   const userId = req.user.id;
@@ -95,22 +97,28 @@ exports.createVisualBooking = async (req, res) => {
     return res.status(400).json({ message: checkBlock.message });
   }
 
+  const client = await db.pool.connect();
+
   try {
-    // 3.1. Kiểm tra sân có hoạt động không
-    const courtRes = await db.query(
-      `SELECT * FROM courts WHERE id = $1 AND tenant_id = $2 AND status = 'PUBLISHED'`,
+    await client.query('BEGIN');
+
+    const courtRes = await client.query(
+      `SELECT * FROM courts
+       WHERE id = $1 AND tenant_id = $2 AND status = 'PUBLISHED'
+       FOR UPDATE`,
       [courtId, tenantId]
     );
+
     if (courtRes.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Sân không tồn tại hoặc chưa được mở bán.' });
     }
     if (courtRes.rows[0].is_under_maintenance) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ message: 'Sân này đang bảo trì, vui lòng chọn sân khác.' });
     }
 
-    // 3.2. Thuật toán kiểm tra trùng lịch (Time-slot Overlap)
-    // Hai khoảng thời gian [A, B] và [C, D] giao nhau khi: A < D VÀ B > C
-    const overlapRes = await db.query(
+    const overlapRes = await client.query(
       `SELECT id FROM bookings
        WHERE court_id = $1
          AND status IN ('PENDING', 'CONFIRMED', 'COMPLETED')
@@ -121,15 +129,15 @@ exports.createVisualBooking = async (req, res) => {
     );
 
     if (overlapRes.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({
         message: 'Khung giờ bạn chọn đã có người đặt hoặc đang được giữ chỗ. Vui lòng chọn khung giờ khác!'
       });
     }
 
-    // 3.3. Lấy cấu hình Tenant, Giá động và Trạng thái Sinh viên mới nhất từ DB
-    const tenantRes = await db.query(`SELECT * FROM tenants WHERE id = $1`, [tenantId]);
-    const rulesRes = await db.query(`SELECT * FROM pricing_rules WHERE tenant_id = $1`, [tenantId]);
-    const userRes = await db.query(`SELECT student_status FROM users WHERE id = $1`, [userId]);
+    const tenantRes = await client.query(`SELECT * FROM tenants WHERE id = $1`, [tenantId]);
+    const rulesRes = await client.query(`SELECT * FROM pricing_rules WHERE tenant_id = $1`, [tenantId]);
+    const userRes = await client.query(`SELECT student_status FROM users WHERE id = $1`, [userId]);
 
     const isVerifiedStudent = userRes.rows[0]?.student_status === 'VERIFIED';
 
@@ -142,10 +150,9 @@ exports.createVisualBooking = async (req, res) => {
       isVerifiedStudent
     });
 
-    // 3.4. Sinh mã đơn hàng ngắn gọn để hiển thị nội dung chuyển khoản VietQR
     const bookingCode = 'DS' + Math.floor(100000 + Math.random() * 900000);
 
-    const insertRes = await db.query(
+    const insertRes = await client.query(
       `INSERT INTO bookings (
         booking_code, tenant_id, court_id, booking_type, user_id,
         booking_date, start_time, end_time,
@@ -168,30 +175,34 @@ exports.createVisualBooking = async (req, res) => {
       ]
     );
 
+    await client.query('COMMIT');
+
     res.status(201).json({
       success: true,
       message: 'Đã tạo đơn đặt sân. Vui lòng thanh toán 100% tiền sân để hoàn tất xác nhận.',
       booking: insertRes.rows[0]
     });
   } catch (error) {
-    console.error(error);
+    await client.query('ROLLBACK');
+    console.error('Lỗi khi tạo đơn đặt sân:', error);
     res.status(500).json({ message: 'Lỗi khi tạo đơn đặt sân.' });
+  } finally {
+    client.release();
   }
 };
 
-// 4. LỄ TÂN / CHỦ SÂN TẠO VÉ VÃNG LAI (WALK_IN) HOẶC VÉ SỰ KIỆN (EVENT)
 exports.createStaffBooking = async (req, res) => {
   const tenantId = req.tenant.id;
   const staffId = req.user.id;
   const {
     courtId,
-    bookingType, // 'WALK_IN' hoặc 'EVENT'
+    bookingType,
     guestName,
     guestPhone,
     bookingDate,
     startTime,
     endTime,
-    customPrice // Cho phép Chủ sân/Lễ tân nhập giá thỏa thuận cho Sự kiện hoặc lấy giá tự động
+    customPrice
   } = req.body;
 
   if (!['WALK_IN', 'EVENT'].includes(bookingType)) {
@@ -203,14 +214,21 @@ exports.createStaffBooking = async (req, res) => {
     return res.status(400).json({ message: checkBlock.message });
   }
 
+  const client = await db.pool.connect();
+
   try {
-    const courtRes = await db.query(`SELECT * FROM courts WHERE id = $1 AND tenant_id = $2`, [courtId, tenantId]);
+    await client.query('BEGIN');
+
+    const courtRes = await client.query(
+      `SELECT * FROM courts WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+      [courtId, tenantId]
+    );
     if (courtRes.rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ message: 'Không tìm thấy sân thuộc cụm sân của bạn.' });
     }
 
-    // Kiểm tra trùng lịch
-    const overlapRes = await db.query(
+    const overlapRes = await client.query(
       `SELECT id FROM bookings
        WHERE court_id = $1
          AND status IN ('PENDING', 'CONFIRMED', 'COMPLETED')
@@ -221,12 +239,13 @@ exports.createStaffBooking = async (req, res) => {
     );
 
     if (overlapRes.rows.length > 0) {
+      await client.query('ROLLBACK');
       return res.status(409).json({ message: 'Khung giờ này đã bị trùng lịch trên hệ thống!' });
     }
 
     let finalAmount = Number(customPrice);
     if (!customPrice || isNaN(finalAmount)) {
-      const rulesRes = await db.query(`SELECT * FROM pricing_rules WHERE tenant_id = $1`, [tenantId]);
+      const rulesRes = await client.query(`SELECT * FROM pricing_rules WHERE tenant_id = $1`, [tenantId]);
       const calc = calculateBookingPrice({
         start: checkBlock.start,
         end: checkBlock.end,
@@ -241,8 +260,7 @@ exports.createStaffBooking = async (req, res) => {
     const prefix = bookingType === 'EVENT' ? 'EV' : 'WL';
     const bookingCode = prefix + Math.floor(100000 + Math.random() * 900000);
 
-    // Vé do Lễ tân/Chủ sân tạo trực tiếp sẽ mang trạng thái CONFIRMED ngay lập tức
-    const insertRes = await db.query(
+    const insertRes = await client.query(
       `INSERT INTO bookings (
         booking_code, tenant_id, court_id, booking_type,
         walk_in_guest_name, walk_in_guest_phone, created_by_staff_id,
@@ -266,14 +284,19 @@ exports.createStaffBooking = async (req, res) => {
       ]
     );
 
+    await client.query('COMMIT');
+
     res.status(201).json({
       success: true,
       message: `Đã tạo lịch ${bookingType === 'EVENT' ? 'Sự kiện' : 'Vãng lai'} thành công!`,
       booking: insertRes.rows[0]
     });
   } catch (error) {
-    console.error(error);
+    await client.query('ROLLBACK');
+    console.error('Lỗi khi tạo lịch trực tiếp tại sân:', error);
     res.status(500).json({ message: 'Lỗi khi tạo lịch trực tiếp tại sân.' });
+  } finally {
+    client.release();
   }
 };
 

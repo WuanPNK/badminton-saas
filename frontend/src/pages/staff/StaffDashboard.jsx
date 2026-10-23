@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 
@@ -52,12 +53,9 @@ export default function StaffDashboard() {
   };
 
   useEffect(() => {
-    const initData = async () => {
-      await loadInitial();
-    };
-    initData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadInitial();
   }, [selectedDate]);
+
   const handleCreateStaffBooking = async (e) => {
     e.preventDefault();
     try {
@@ -75,31 +73,31 @@ export default function StaffDashboard() {
         customPrice: staffBooking.customPrice || undefined,
       });
 
-      alert(res.data.message);
+      toast.success(res.data.message);
       setStaffBooking({ ...staffBooking, guestName: '', guestPhone: '', customPrice: '' });
       loadInitial();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi khi tạo vé.');
+      toast.error(err.response?.data?.message || 'Lỗi khi tạo vé.');
     }
   };
 
   const handleOperation = async (bookingId, action) => {
     try {
       const res = await axiosClient.put(`/bookings/${bookingId}/operation`, { action });
-      alert(res.data.message);
+      toast.success(res.data.message);
       loadInitial();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi thao tác.');
+      toast.error(err.response?.data?.message || 'Lỗi thao tác.');
     }
   };
 
   const handleConfirmRefunded = async (bookingId) => {
     try {
       const res = await axiosClient.put(`/payments/${bookingId}/confirm-refund`);
-      alert(res.data.message);
+      toast.success(res.data.message);
       loadInitial();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi xác nhận hoàn tiền.');
+      toast.error(err.response?.data?.message || 'Lỗi xác nhận hoàn tiền.');
     }
   };
 
@@ -127,11 +125,11 @@ export default function StaffDashboard() {
         paymentMethod: 'CASH',
         items: cart.map((c) => ({ productId: c.productId, quantity: c.quantity })),
       });
-      alert(res.data.message);
+      toast.success(res.data.message);
       setCart([]);
       loadInitial();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi thanh toán POS.');
+      toast.error(err.response?.data?.message || 'Lỗi thanh toán POS.');
     }
   };
 

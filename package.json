@@ -1,0 +1,13 @@
+{
+  "name": "badminton-saas",
+  "version": "1.0.0",
+  "description": "Nền tảng Đặt lịch Sân Cầu Lông & Quản trị Multi-Tenant SaaS",
+  "private": true,
+  "scripts": {
+    "dev": "node start.js",
+    "start": "node start.js",
+    "init-db": "npm --prefix backend run init-db",
+    "install-all": "npm --prefix backend install && npm --prefix frontend install",
+    "build": "npm --prefix frontend run build"
+  }
+}

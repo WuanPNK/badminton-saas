@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 
@@ -60,12 +61,9 @@ export default function TenantDashboard() {
   };
 
   useEffect(() => {
-    const initData = async () => {
-      await fetchTenantData();
-    };
-    initData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchTenantData();
   }, []);
+
   const handleSaveSettings = async (e) => {
     e.preventDefault();
     try {
@@ -83,10 +81,10 @@ export default function TenantDashboard() {
         qrAccountNumber: tenant.qr_account_number,
         qrAccountName: tenant.qr_account_name,
       });
-      alert(res.data.message);
+      toast.success(res.data.message);
       fetchTenantData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi lưu cấu hình.');
+      toast.error(err.response?.data?.message || 'Lỗi lưu cấu hình.');
     }
   };
 
@@ -94,11 +92,11 @@ export default function TenantDashboard() {
     e.preventDefault();
     try {
       const res = await axiosClient.post('/tenant/courts', newCourt);
-      alert(res.data.message);
+      toast.success(res.data.message);
       setNewCourt({ name: '', type: 'STANDARD' });
       fetchTenantData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi tạo sân.');
+      toast.error(err.response?.data?.message || 'Lỗi tạo sân.');
     }
   };
 
@@ -109,7 +107,7 @@ export default function TenantDashboard() {
       });
       fetchTenantData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi đổi trạng thái bảo trì.');
+      toast.error(err.response?.data?.message || 'Lỗi đổi trạng thái bảo trì.');
     }
   };
 
@@ -120,10 +118,10 @@ export default function TenantDashboard() {
         ...newRule,
         daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
       });
-      alert('Đã thêm khung giá động thành công!');
+      toast.success('Đã thêm khung giá động thành công!');
       fetchTenantData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi thêm giá động.');
+      toast.error(err.response?.data?.message || 'Lỗi thêm giá động.');
     }
   };
 
@@ -132,7 +130,7 @@ export default function TenantDashboard() {
       await axiosClient.delete(`/tenant/pricing-rules/${ruleId}`);
       fetchTenantData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi xóa khung giá.');
+      toast.error(err.response?.data?.message || 'Lỗi xóa khung giá.');
     }
   };
 
@@ -140,11 +138,11 @@ export default function TenantDashboard() {
     e.preventDefault();
     try {
       await axiosClient.post('/pos/products', newProduct);
-      alert('Đã thêm sản phẩm vào kho POS!');
+      toast.success('Đã thêm sản phẩm vào kho POS!');
       setNewProduct({ name: '', category: 'DRINK', price: 15000, stockQuantity: 50 });
       fetchTenantData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi thêm sản phẩm.');
+      toast.error(err.response?.data?.message || 'Lỗi thêm sản phẩm.');
     }
   };
 
@@ -152,11 +150,11 @@ export default function TenantDashboard() {
     e.preventDefault();
     try {
       const res = await axiosClient.post('/tenant/staff', newStaff);
-      alert(res.data.message);
+      toast.success(res.data.message);
       setNewStaff({ fullName: '', email: '', phone: '', password: '' });
       fetchTenantData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi tạo nhân viên.');
+      toast.error(err.response?.data?.message || 'Lỗi tạo nhân viên.');
     }
   };
 

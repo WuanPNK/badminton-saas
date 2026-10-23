@@ -5,8 +5,8 @@ const { verifyToken, authorizeRoles } = require('../../middlewares/authMiddlewar
 const { verifyActiveTenant } = require('../../middlewares/tenantMiddleware');
 
 // --- ROUTES DÀNH CHO KHÁCH HÀNG XEM MARKETPLACE ---
-router.get('/marketplace', verifyToken, tenantController.getMarketplaceTenants);
-router.get('/marketplace/:id', verifyToken, tenantController.getTenantPublicDetail);
+router.get('/marketplace', tenantController.getMarketplaceTenants);
+router.get('/marketplace/:id', tenantController.getTenantPublicDetail);
 
 // --- ROUTES DÀNH CHO CHỦ SÂN & LỄ TÂN XEM CẤU HÌNH ---
 router.get(

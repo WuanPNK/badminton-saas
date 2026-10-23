@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 
 import AuthPage from './pages/auth/AuthPage';
@@ -11,7 +12,7 @@ import StaffDashboard from './pages/staff/StaffDashboard';
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const { user, loading } = useAuth();
   if (loading) return null;
-  if (!user) return <Navigate to="/" replace />;
+  if (!user) return <Navigate to="/login" replace />;
   if (allowedRoles && !allowedRoles.includes(user.role)) {
     return <Navigate to="/" replace />;
   }
@@ -21,28 +22,17 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 export default function App() {
   return (
     <AuthProvider>
+      <Toaster position="top-right" toastOptions={{ duration: 3500 }} />
       <BrowserRouter>
         <Routes>
-          {/* Trang chủ tối giản: Chỉ hiện màn hình Đăng nhập / Đăng ký */}
-          <Route path="/" element={<AuthPage />} />
+          {/* Trang chủ: Hiển thị danh sách sân ngay khi mở web */}
+          <Route path="/" element={<UserMarketplace />} />
+          <Route path="/marketplace" element={<Navigate to="/" replace />} />
+          <Route path="/marketplace/:id" element={<TenantBookingPage />} />
 
-          {/* Luồng Khách hàng (End-User) */}
-          <Route
-            path="/marketplace"
-            element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <UserMarketplace />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/marketplace/:id"
-            element={
-              <ProtectedRoute allowedRoles={['USER']}>
-                <TenantBookingPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* Trang Đăng nhập & Đăng ký */}
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/auth" element={<Navigate to="/login" replace />} />
 
           {/* Luồng Super Admin */}
           <Route

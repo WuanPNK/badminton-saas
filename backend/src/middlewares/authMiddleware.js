@@ -17,6 +17,20 @@ const verifyToken = (req, res, next) => {
   }
 };
 
+const optionalAuth = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return next();
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+  } catch (err) {
+    // Ignore invalid token in optional mode
+  }
+  next();
+};
+
 // Middleware kiểm tra quyền (SUPER_ADMIN, TENANT_ADMIN, STAFF, USER)
 const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
@@ -27,4 +41,4 @@ const authorizeRoles = (...allowedRoles) => {
   };
 };
 
-module.exports = { verifyToken, authorizeRoles };
+module.exports = { verifyToken, optionalAuth, authorizeRoles };

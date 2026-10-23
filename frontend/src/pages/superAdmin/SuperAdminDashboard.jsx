@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 
@@ -39,39 +40,36 @@ export default function SuperAdminDashboard() {
   };
 
   useEffect(() => {
-    const initData = async () => {
-      await fetchAllData();
-    };
-    initData();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    fetchAllData();
   }, []);
+
   const handleTenantStatus = async (id, status) => {
     try {
       const res = await axiosClient.put(`/super-admin/tenants/${id}/status`, { status });
-      alert(res.data.message);
+      toast.success(res.data.message);
       fetchAllData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi cập nhật trạng thái chủ sân.');
+      toast.error(err.response?.data?.message || 'Lỗi cập nhật trạng thái chủ sân.');
     }
   };
 
   const handleCourtStatus = async (id, status) => {
     try {
       const res = await axiosClient.put(`/super-admin/courts/${id}/status`, { status });
-      alert(res.data.message);
+      toast.success(res.data.message);
       fetchAllData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi duyệt sân.');
+      toast.error(err.response?.data?.message || 'Lỗi duyệt sân.');
     }
   };
 
   const handleStudentVerify = async (userId, status) => {
     try {
       const res = await axiosClient.put(`/super-admin/students/${userId}/verify`, { status });
-      alert(res.data.message);
+      toast.success(res.data.message);
       fetchAllData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi duyệt thẻ sinh viên.');
+      toast.error(err.response?.data?.message || 'Lỗi duyệt thẻ sinh viên.');
     }
   };
 
@@ -79,11 +77,11 @@ export default function SuperAdminDashboard() {
     e.preventDefault();
     try {
       const res = await axiosClient.post('/super-admin/subscriptions/record', subForm);
-      alert(res.data.message);
+      toast.success(res.data.message);
       setSubForm({ ...subForm, tenantId: '' });
       fetchAllData();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi ghi nhận gói cước.');
+      toast.error(err.response?.data?.message || 'Lỗi ghi nhận gói cước.');
     }
   };
 

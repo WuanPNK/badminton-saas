@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 
@@ -159,16 +160,14 @@ export default function TenantBookingPage() {
         setStartSlot(block.start);
         setEndSlot(nextBlock.end);
       } else {
-        alert('Thời lượng đặt sân tối thiểu là 1 tiếng (2 ô 30 phút liên tiếp). Khung giờ kế tiếp đã kín!');
+        toast.error('Thời lượng đặt sân tối thiểu là 1 tiếng (2 ô 30 phút liên tiếp).');
       }
       return;
     }
 
-    // Nếu đang trên cùng 1 sân: mở rộng hoặc thu hẹp khoảng thời gian
     const currentStartIdx = HALF_HOUR_BLOCKS.findIndex((b) => b.start === startSlot);
     const currentEndIdx = HALF_HOUR_BLOCKS.findIndex((b) => b.end === endSlot);
 
-    // Nếu bấm lại vào đúng vùng đang chọn và chỉ có 2 block -> Bỏ chọn
     if (block.index >= currentStartIdx && block.index <= currentEndIdx && currentEndIdx - currentStartIdx === 1) {
       setSelectedCourtId('');
       setStartSlot('');
@@ -179,15 +178,14 @@ export default function TenantBookingPage() {
     const newStartIdx = Math.min(currentStartIdx, block.index);
     const newEndIdx = Math.max(currentEndIdx, block.index);
 
-    // Nếu bấm vào 1 ô phía sau hoặc phía trước -> nối liền khoảng chọn
     if (block.index > currentStartIdx) {
       if (!isRangeFree(court, currentStartIdx, block.index)) {
-        return alert('Không thể chọn nối qua khung giờ đã có người đặt!');
+        return toast.error('Không thể chọn nối qua khung giờ đã có người đặt!');
       }
       setEndSlot(block.end);
     } else if (block.index < currentStartIdx) {
       if (!isRangeFree(court, block.index, currentEndIdx)) {
-        return alert('Không thể chọn nối qua khung giờ đã có người đặt!');
+        return toast.error('Không thể chọn nối qua khung giờ đã có người đặt!');
       }
       setStartSlot(block.start);
     } else if (newEndIdx - newStartIdx >= 1) {
@@ -195,8 +193,13 @@ export default function TenantBookingPage() {
     }
   };
 
-  // Tạo đơn đặt sân trực quan & Mở màn hình VietQR
   const handleCreateVisualBooking = async () => {
+    if (!user) {
+      toast.error('Vui lòng đăng nhập để tiến hành đặt sân và thanh toán!');
+      navigate('/login');
+      return;
+    }
+
     try {
       const startIso = `${selectedDate}T${startSlot}:00`;
       const endIso = `${selectedDate}T${endSlot}:00`;
@@ -214,19 +217,18 @@ export default function TenantBookingPage() {
       setPaymentData(qrRes.data.paymentData);
       fetchTimeline();
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi khi đặt lịch.');
+      toast.error(err.response?.data?.message || 'Lỗi khi đặt lịch.');
     }
   };
 
-  // Bấm nút Mô phỏng Đã chuyển khoản 100%
   const handleMockConfirmPayment = async () => {
     try {
       const res = await axiosClient.put(`/payments/${paymentData.bookingId}/pay-mock`);
-      alert(res.data.message);
+      toast.success(res.data.message);
       setPaymentData(null);
-      navigate('/marketplace');
+      navigate('/');
     } catch (err) {
-      alert(err.response?.data?.message || 'Lỗi xác nhận thanh toán.');
+      toast.error(err.response?.data?.message || 'Lỗi xác nhận thanh toán.');
     }
   };
 
@@ -243,25 +245,36 @@ export default function TenantBookingPage() {
         <header className="bg-[#046A38] text-white px-4 sm:px-8 py-3.5 shadow-md">
           <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-3">
             <button
-              onClick={() => navigate('/marketplace')}
+              onClick={() => navigate('/')}
               className="flex items-center gap-2 text-xs sm:text-sm font-bold hover:text-emerald-200 transition"
             >
               <span className="text-lg">‹</span>
-              <span>Quay lại</span>
+              <span>Quay lại Trang chủ</span>
             </button>
 
             <h1 className="text-sm sm:text-lg font-extrabold uppercase tracking-wide text-center">
               ĐẶT LỊCH THEO SÂN - TRỰC QUAN ({tenantDetail.tenant.name})
             </h1>
 
-            <div className="flex items-center gap-2 bg-white/15 px-3 py-1.5 rounded-xl border border-white/20">
-              <span className="text-xs font-bold">Ngày:</span>
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={(e) => setSelectedDate(e.target.value)}
-                className="bg-transparent text-white text-xs sm:text-sm font-extrabold focus:outline-none cursor-pointer"
-              />
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-2 bg-white/15 px-3 py-1.5 rounded-xl border border-white/20">
+                <span className="text-xs font-bold">Ngày:</span>
+                <input
+                  type="date"
+                  value={selectedDate}
+                  onChange={(e) => setSelectedDate(e.target.value)}
+                  className="bg-transparent text-white text-xs sm:text-sm font-extrabold focus:outline-none cursor-pointer"
+                />
+              </div>
+
+              {!user && (
+                <button
+                  onClick={() => navigate('/login')}
+                  className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-extrabold px-3.5 py-1.5 rounded-xl text-xs transition shadow-sm"
+                >
+                  Đăng nhập
+                </button>
+              )}
             </div>
           </div>
 

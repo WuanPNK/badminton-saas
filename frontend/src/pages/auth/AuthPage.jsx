@@ -1,18 +1,29 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 
 export default function AuthPage() {
-  // mode: 'LOGIN' | 'REGISTER_USER' | 'REGISTER_TENANT' | 'FORGOT_PASSWORD'
-  const [mode, setMode] = useState('LOGIN');
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState(() => {
+    return searchParams.get('mode') === 'register' ? 'REGISTER_USER' : 'LOGIN';
+  });
   const [showRegisterPopup, setShowRegisterPopup] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
-  const { login } = useAuth();
+  const { user, login } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (user) {
+      if (user.role === 'SUPER_ADMIN') navigate('/super-admin');
+      else if (user.role === 'TENANT_ADMIN') navigate('/tenant');
+      else if (user.role === 'STAFF') navigate('/staff');
+      else navigate('/');
+    }
+  }, [user, navigate]);
 
   const [form, setForm] = useState({
     fullName: '',
@@ -193,7 +204,7 @@ export default function AuthPage() {
       if (user.role === 'SUPER_ADMIN') navigate('/super-admin');
       else if (user.role === 'TENANT_ADMIN') navigate('/tenant');
       else if (user.role === 'STAFF') navigate('/staff');
-      else navigate('/marketplace');
+      else navigate('/');
     } catch (err) {
       setMessage({
         type: 'error',
@@ -213,6 +224,16 @@ export default function AuthPage() {
       {/* CARD ĐƠN GIẢN TRUNG TÂM (ĐÃ XOÁ BANNER BÊN TRÁI) */}
       <div className="bg-white w-full max-w-lg rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.07)] border border-slate-100 p-6 sm:p-10">
         
+        {/* NÚT QUAY LẠI TRANG CHỦ */}
+        <button
+          type="button"
+          onClick={() => navigate('/')}
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-emerald-700 transition mb-4 group"
+        >
+          <span className="group-hover:-translate-x-0.5 transition-transform">←</span>
+          <span>Quay lại Khám phá Sân</span>
+        </button>
+
         {/* TIÊU ĐỀ */}
         <div className="mb-6">
           <h2 className="text-2xl font-extrabold text-slate-900">

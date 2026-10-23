@@ -1,14 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const bookingController = require('./bookingController');
-const { verifyToken, authorizeRoles } = require('../../middlewares/authMiddleware');
+const { verifyToken, optionalAuth, authorizeRoles } = require('../../middlewares/authMiddleware');
 const { verifyActiveTenant } = require('../../middlewares/tenantMiddleware');
 
-// Xem lưới lịch Timeline theo ngày của 1 cụm sân (Dùng cho cả Khách và Lễ tân)
-router.get('/timeline/:tenantId', verifyToken, bookingController.getDailyTimeline);
+// Xem lưới lịch Timeline theo ngày của 1 cụm sân (Dùng cho Khách, Khách vãng lai, và Lễ tân)
+router.get('/timeline/:tenantId', bookingController.getDailyTimeline);
 
 // Khách xem trước giá tiền (Tự động áp dụng ưu đãi nếu là Sinh viên VERIFIED)
-router.post('/preview-price', verifyToken, authorizeRoles('USER'), bookingController.previewBookingPrice);
+router.post('/preview-price', optionalAuth, bookingController.previewBookingPrice);
 
 // Khách đặt sân trực quan
 router.post('/visual', verifyToken, authorizeRoles('USER'), bookingController.createVisualBooking);
