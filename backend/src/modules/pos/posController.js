@@ -258,17 +258,102 @@ exports.getTenantAnalytics = async (req, res) => {
 
     const courtRev = Number(bookingStats.rows[0].court_revenue);
     const posRev = Number(posStats.rows[0].pos_revenue);
+    const totalRev = courtRev + posRev;
+
+    // 6.4. Dữ liệu biểu đồ 7 ngày gần nhất (Daily Revenue Trend)
+    const paidBookingsAll = await db.query(
+      `SELECT start_time, final_price, status
+       FROM bookings
+       WHERE tenant_id = $1 AND status IN ('CONFIRMED', 'COMPLETED')`,
+      [tenantId]
+    );
+
+    const paidPosAll = await db.query(
+      `SELECT created_at, total_amount
+       FROM pos_orders
+       WHERE tenant_id = $1`,
+      [tenantId]
+    );
+
+    const dayMap = {};
+    const dayLabels = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
+    const last7Days = [];
+
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateKey = d.toISOString().split('T')[0];
+      const item = {
+        date: dateKey,
+        dayLabel: dayLabels[d.getDay()],
+        displayDate: `${d.getDate()}/${d.getMonth() + 1}`,
+        courtRevenue: 0,
+        posRevenue: 0,
+        totalRevenue: 0,
+        bookingCount: 0
+      };
+      dayMap[dateKey] = item;
+      last7Days.push(item);
+    }
+
+    paidBookingsAll.rows.forEach((b) => {
+      const bDate = new Date(b.start_time);
+      const dateKey = bDate.toISOString().split('T')[0];
+      if (dayMap[dateKey]) {
+        const val = Number(b.final_price) || 0;
+        dayMap[dateKey].courtRevenue += val;
+        dayMap[dateKey].totalRevenue += val;
+        dayMap[dateKey].bookingCount += 1;
+      }
+    });
+
+    paidPosAll.rows.forEach((p) => {
+      const pDate = new Date(p.created_at);
+      const dateKey = pDate.toISOString().split('T')[0];
+      if (dayMap[dateKey]) {
+        const val = Number(p.total_amount) || 0;
+        dayMap[dateKey].posRevenue += val;
+        dayMap[dateKey].totalRevenue += val;
+      }
+    });
+
+    // 6.5. Dữ liệu phân bổ khung giờ cao điểm (Peak Hours Distribution)
+    const timeSlots = [
+      { slot: '05:00 - 09:00', title: 'Sáng sớm', count: 0 },
+      { slot: '09:00 - 14:00', title: 'Ban ngày', count: 0 },
+      { slot: '14:00 - 17:00', title: 'Chiều', count: 0 },
+      { slot: '17:00 - 20:00', title: 'Giờ vàng 🔥', count: 0 },
+      { slot: '20:00 - 22:00', title: 'Tối muộn', count: 0 }
+    ];
+
+    paidBookingsAll.rows.forEach((b) => {
+      const bDate = new Date(b.start_time);
+      const hour = bDate.getHours();
+      if (hour >= 5 && hour < 9) timeSlots[0].count++;
+      else if (hour >= 9 && hour < 14) timeSlots[1].count++;
+      else if (hour >= 14 && hour < 17) timeSlots[2].count++;
+      else if (hour >= 17 && hour < 20) timeSlots[3].count++;
+      else if (hour >= 20 && hour <= 22) timeSlots[4].count++;
+    });
 
     res.json({
       success: true,
       summary: {
-        totalRevenue: courtRev + posRev,
+        totalRevenue: totalRev,
         courtRevenue: courtRev,
         posRevenue: posRev,
         paidBookingsCount: Number(bookingStats.rows[0].paid_bookings_count),
         pendingRefundCount: Number(bookingStats.rows[0].pending_refund_count),
         totalRefundedAmount: Number(bookingStats.rows[0].total_refunded_amount),
         totalPosOrders: Number(posStats.rows[0].total_pos_orders)
+      },
+      chartData: {
+        dailyTrends: last7Days,
+        timeSlots,
+        revenueSplit: {
+          courtPercent: totalRev > 0 ? Math.round((courtRev / totalRev) * 100) : 100,
+          posPercent: totalRev > 0 ? Math.round((posRev / totalRev) * 100) : 0,
+        }
       },
       advancedAnalyticsEnabled: req.tenant.enable_advanced_analytics,
       advancedData

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
+import RevenueCharts from '../../components/tenant/RevenueCharts';
 
 export default function TenantDashboard() {
   const { logout } = useAuth();
@@ -574,60 +575,9 @@ export default function TenantDashboard() {
           </div>
         )}
 
-        {/* TAB 5: BÁO CÁO DOANH THU */}
+        {/* TAB 5: BÁO CÁO DOANH THU & BIỂU ĐỒ TRỰC QUAN */}
         {tab === 'ANALYTICS' && analytics && (
-          <div className="space-y-6">
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                <p className="text-[11px] font-bold uppercase text-slate-400">Tổng Doanh Thu (Sân + POS)</p>
-                <p className="text-2xl font-black text-emerald-600 mt-1">
-                  {Number(analytics.summary.totalRevenue).toLocaleString()} ₫
-                </p>
-              </div>
-              <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                <p className="text-[11px] font-bold uppercase text-slate-400">Doanh Thu Đặt Sân</p>
-                <p className="text-2xl font-extrabold text-slate-900 mt-1">
-                  {Number(analytics.summary.courtRevenue).toLocaleString()} ₫
-                </p>
-              </div>
-              <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                <p className="text-[11px] font-bold uppercase text-slate-400">Doanh Thu Bán Hàng POS</p>
-                <p className="text-2xl font-extrabold text-slate-900 mt-1">
-                  {Number(analytics.summary.posRevenue).toLocaleString()} ₫
-                </p>
-              </div>
-              <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100">
-                <p className="text-[11px] font-bold uppercase text-slate-400">Đơn Chờ Hoàn Tiền</p>
-                <p className="text-2xl font-extrabold text-red-600 mt-1">
-                  {analytics.summary.pendingRefundCount} đơn
-                </p>
-              </div>
-            </div>
-
-            {analytics.advancedAnalyticsEnabled && analytics.advancedData && (
-              <div className="grid md:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-3">
-                  <h3 className="font-extrabold text-slate-900 text-sm">Doanh thu chi tiết theo từng Sân</h3>
-                  {analytics.advancedData.revenueByCourt.map((rc, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl text-xs">
-                      <span><strong>{rc.court_name}</strong> ({rc.type}) — {rc.total_bookings} ca đặt</span>
-                      <strong className="text-emerald-700">{Number(rc.revenue).toLocaleString()} ₫</strong>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-3">
-                  <h3 className="font-extrabold text-slate-900 text-sm">Top sản phẩm POS bán chạy</h3>
-                  {analytics.advancedData.topProducts.map((tp, idx) => (
-                    <div key={idx} className="flex justify-between items-center p-3 bg-slate-50 rounded-2xl text-xs">
-                      <span><strong>{tp.name}</strong> (Đã bán: {tp.total_sold})</span>
-                      <strong className="text-emerald-700">{Number(tp.revenue).toLocaleString()} ₫</strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
+          <RevenueCharts analytics={analytics} />
         )}
       </div>
     </div>
