@@ -13,7 +13,7 @@ exports.getDailyTimeline = async (req, res) => {
   try {
     // Lấy danh sách sân đã PUBLISHED của cụm sân
     const courtsRes = await db.query(
-      `SELECT id, name, type, is_under_maintenance
+      `SELECT id, name, type, is_under_maintenance, maintenance_start, maintenance_note
        FROM courts
        WHERE tenant_id = $1 AND status = 'PUBLISHED'
        ORDER BY name ASC`,
@@ -53,6 +53,14 @@ exports.previewBookingPrice = async (req, res) => {
     return res.status(400).json({ message: checkBlock.message });
   }
 
+  // Khách chỉ được đặt trước tối đa 4 ngày
+  const bookingDate = startTime.split('T')[0];
+  const todayStr = new Date().toISOString().split('T')[0];
+  const diffDays = Math.round((new Date(bookingDate) - new Date(todayStr)) / (1000 * 3600 * 24));
+  if (diffDays < 0 || diffDays > 4) {
+    return res.status(400).json({ message: 'Quý khách chỉ có thể đặt sân sớm trước tối đa 4 ngày.' });
+  }
+
   try {
     const tenantRes = await db.query(`SELECT * FROM tenants WHERE id = $1 AND status = 'ACTIVE'`, [tenantId]);
     const courtRes = await db.query(`SELECT * FROM courts WHERE id = $1 AND tenant_id = $2`, [courtId, tenantId]);
@@ -60,6 +68,13 @@ exports.previewBookingPrice = async (req, res) => {
 
     if (tenantRes.rows.length === 0 || courtRes.rows.length === 0) {
       return res.status(404).json({ message: 'Không tìm thấy thông tin sân.' });
+    }
+
+    if (courtRes.rows[0].is_under_maintenance) {
+      const maintStart = courtRes.rows[0].maintenance_start ? new Date(courtRes.rows[0].maintenance_start) : null;
+      if (!maintStart || new Date(checkBlock.end) > maintStart) {
+        return res.status(400).json({ message: 'Sân này đang trong thời gian bảo trì, vui lòng chọn sân khác.' });
+      }
     }
 
     let isVerifiedStudent = false;
@@ -97,6 +112,13 @@ exports.createVisualBooking = async (req, res) => {
     return res.status(400).json({ message: checkBlock.message });
   }
 
+  // Khách chỉ được đặt trước tối đa 4 ngày
+  const todayStr = new Date().toISOString().split('T')[0];
+  const diffDays = Math.round((new Date(bookingDate) - new Date(todayStr)) / (1000 * 3600 * 24));
+  if (diffDays < 0 || diffDays > 4) {
+    return res.status(400).json({ message: 'Quý khách chỉ có thể đặt sân sớm trước tối đa 4 ngày.' });
+  }
+
   const client = await db.pool.connect();
 
   try {
@@ -114,8 +136,11 @@ exports.createVisualBooking = async (req, res) => {
       return res.status(404).json({ message: 'Sân không tồn tại hoặc chưa được mở bán.' });
     }
     if (courtRes.rows[0].is_under_maintenance) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ message: 'Sân này đang bảo trì, vui lòng chọn sân khác.' });
+      const maintStart = courtRes.rows[0].maintenance_start ? new Date(courtRes.rows[0].maintenance_start) : null;
+      if (!maintStart || new Date(checkBlock.end) > maintStart) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ message: 'Sân này đang trong thời gian bảo trì, vui lòng chọn sân khác.' });
+      }
     }
 
     const overlapRes = await client.query(

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
@@ -29,6 +29,13 @@ export default function TenantBookingPage() {
   const { id: tenantId } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const maxBookingDateStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 4);
+    return d.toISOString().split('T')[0];
+  }, []);
 
   const [tenantDetail, setTenantDetail] = useState(null);
   const [selectedDate, setSelectedDate] = useState(() => {
@@ -119,6 +126,19 @@ export default function TenantBookingPage() {
 
     const blockStartMins = timeToMinutes(block.start);
     const blockEndMins = timeToMinutes(block.end);
+
+    // Kiểm tra xem sân có đang trong trạng thái Bảo trì không
+    if (court.is_under_maintenance) {
+      if (court.maintenance_start) {
+        const slotEndIso = `${selectedDate}T${block.end}:00`;
+        const maintStart = new Date(court.maintenance_start);
+        if (new Date(slotEndIso) > maintStart) {
+          return { status: 'MAINTENANCE', note: court.maintenance_note || 'Sân đang bảo trì' };
+        }
+      } else {
+        return { status: 'MAINTENANCE', note: court.maintenance_note || 'Sân đang bảo trì' };
+      }
+    }
 
     const matchedBooking = timeline.bookings.find((b) => {
       if (b.court_id !== court.id) return false;
@@ -341,9 +361,23 @@ export default function TenantBookingPage() {
                 <span className="text-xs font-bold">Ngày:</span>
                 <input
                   type="date"
+                  min={todayStr}
+                  max={maxBookingDateStr}
                   value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val > maxBookingDateStr) {
+                      toast.error('Quý khách chỉ có thể đặt sân sớm trước tối đa 4 ngày.');
+                      setSelectedDate(maxBookingDateStr);
+                    } else if (val < todayStr) {
+                      toast.error('Không thể chọn ngày trong quá khứ.');
+                      setSelectedDate(todayStr);
+                    } else {
+                      setSelectedDate(val);
+                    }
+                  }}
                   className="bg-transparent text-white text-xs sm:text-sm font-extrabold focus:outline-none cursor-pointer"
+                  title="Chỉ có thể đặt trước tối đa 4 ngày"
                 />
               </div>
 
@@ -463,7 +497,8 @@ export default function TenantBookingPage() {
                         cellClass = 'bg-purple-400 text-white cursor-not-allowed';
                         cellContent = <span className="text-[10px] font-bold">Sự kiện</span>;
                       } else if (state.status === 'MAINTENANCE') {
-                        cellClass = 'bg-slate-300 text-slate-600 cursor-not-allowed';
+                        cellClass = 'bg-slate-300 text-slate-700 cursor-not-allowed font-medium';
+                        cellContent = <span className="text-[10px]">🔧 Bảo trì</span>;
                       } else if (state.status === 'SELECTED') {
                         cellClass =
                           'bg-emerald-500 text-white font-bold cursor-pointer ring-1 ring-emerald-700';
@@ -477,7 +512,11 @@ export default function TenantBookingPage() {
                           onMouseEnter={() => handleCellMouseEnter(court, block)}
                           onMouseUp={() => handleCellMouseUp(court, block)}
                           onClick={() => handleCellClick(court, block)}
-                          title={`${court.name} (${block.start} - ${block.end}) - Bấm hoặc kéo chuột để chọn`}
+                          title={
+                            state.status === 'MAINTENANCE'
+                              ? `${court.name} (${block.start} - ${block.end}) - ${state.note || 'Đang bảo trì'}`
+                              : `${court.name} (${block.start} - ${block.end}) - Bấm hoặc kéo chuột để chọn`
+                          }
                           style={{ width: `${cellWidth}px`, minWidth: `${cellWidth}px` }}
                           className={`h-12 border-b border-r border-slate-300 text-center align-middle transition-colors select-none ${cellClass}`}
                         >

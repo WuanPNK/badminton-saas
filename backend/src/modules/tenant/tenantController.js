@@ -12,7 +12,7 @@ exports.getMarketplaceTenants = async (req, res) => {
   try {
     let queryText = `
       SELECT t.id, t.name, t.district, t.address, t.phone_contact, t.description,
-             t.student_discount_type, t.student_discount_value,
+             t.student_discount_type, t.student_discount_value, t.images, t.rules,
              COUNT(DISTINCT c.id) FILTER (WHERE c.status = 'PUBLISHED') AS total_courts,
              COALESCE(ROUND(AVG(r.rating), 1), 0) AS avg_rating,
              COUNT(DISTINCT r.id) AS total_reviews
@@ -52,6 +52,7 @@ exports.getTenantPublicDetail = async (req, res) => {
       `SELECT t.id, t.name, t.district, t.address, t.phone_contact, t.description,
               t.student_discount_type, t.student_discount_value,
               t.qr_bank_name, t.qr_account_number, t.qr_account_name,
+              t.images, t.rules,
               COALESCE(ROUND(AVG(r.rating), 1), 0) AS avg_rating,
               COUNT(DISTINCT r.id) AS total_reviews
        FROM tenants t
@@ -66,7 +67,7 @@ exports.getTenantPublicDetail = async (req, res) => {
     }
 
     const courtsRes = await db.query(
-      `SELECT id, name, type, is_under_maintenance
+      `SELECT id, name, type, is_under_maintenance, maintenance_start, maintenance_note
        FROM courts
        WHERE tenant_id = $1 AND status = 'PUBLISHED'
        ORDER BY name ASC`,
@@ -213,16 +214,27 @@ exports.getMyCourts = async (req, res) => {
   }
 };
 
-// 7. Đổi trạng thái Bảo trì Sân (is_under_maintenance)
-exports.toggleCourtMaintenance = async (req, res) => {
+// 6b. Cập nhật thông tin Sân (Tên & Phân loại)
+exports.updateCourt = async (req, res) => {
   const { courtId } = req.params;
-  const { isUnderMaintenance } = req.body;
+  const { name, type } = req.body;
+  const tenantId = req.tenant.id;
+
+  if (!name) {
+    return res.status(400).json({ message: 'Vui lòng nhập tên sân.' });
+  }
+
+  if (type === 'VIP' && !req.tenant.enable_vip_courts) {
+    return res.status(403).json({
+      message: 'Bạn cần bật công tắc "Sử dụng Sân VIP" trong phần Cài đặt trước khi chọn phân loại VIP.'
+    });
+  }
 
   try {
     const result = await db.query(
-      `UPDATE courts SET is_under_maintenance = $1
-       WHERE id = $2 AND tenant_id = $3 RETURNING *`,
-      [Boolean(isUnderMaintenance), courtId, req.tenant.id]
+      `UPDATE courts SET name = $1, type = $2
+       WHERE id = $3 AND tenant_id = $4 RETURNING *`,
+      [name, type || 'STANDARD', courtId, tenantId]
     );
 
     if (result.rows.length === 0) {
@@ -231,12 +243,119 @@ exports.toggleCourtMaintenance = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Đã cập nhật trạng thái bảo trì sân.',
+      message: 'Đã cập nhật thông tin sân thành công!',
       court: result.rows[0]
     });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Lỗi khi cập nhật bảo trì sân.' });
+    res.status(500).json({ message: 'Lỗi khi cập nhật sân.' });
+  }
+};
+
+// 6c. Xóa Sân (Kiểm tra lịch tương lai)
+exports.deleteCourt = async (req, res) => {
+  const { courtId } = req.params;
+  const tenantId = req.tenant.id;
+
+  try {
+    const futureBookings = await db.query(
+      `SELECT id FROM bookings
+       WHERE court_id = $1 AND status IN ('PENDING', 'CONFIRMED') AND end_time > NOW()
+       LIMIT 1`,
+      [courtId]
+    );
+
+    if (futureBookings.rows.length > 0) {
+      return res.status(400).json({
+        message: 'Không thể xóa sân này vì đang có khách đặt lịch trong tương lai. Vui lòng xử lý lịch trước.'
+      });
+    }
+
+    await db.query(`DELETE FROM courts WHERE id = $1 AND tenant_id = $2`, [courtId, tenantId]);
+
+    res.json({ success: true, message: 'Đã xóa sân thành công!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi xóa sân.' });
+  }
+};
+
+// 7. Lên lịch Bảo trì Sân (Kiểm tra lịch khách đã đặt trước, hỗ trợ chọn thời gian bắt đầu)
+exports.scheduleCourtMaintenance = async (req, res) => {
+  const { courtId } = req.params;
+  const { isUnderMaintenance, maintenanceStart, maintenanceNote } = req.body;
+  const tenantId = req.tenant.id;
+
+  try {
+    const courtRes = await db.query(
+      `SELECT * FROM courts WHERE id = $1 AND tenant_id = $2`,
+      [courtId, tenantId]
+    );
+    if (courtRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy sân.' });
+    }
+
+    if (isUnderMaintenance) {
+      const startTime = maintenanceStart ? new Date(maintenanceStart) : new Date();
+
+      // Kiểm tra xem đã có khách đặt lịch trong hoặc sau thời điểm bảo trì này chưa
+      const conflictRes = await db.query(
+        `SELECT b.id, b.booking_code, b.start_time, b.end_time,
+                COALESCE(u.full_name, b.walk_in_guest_name, 'Khách hàng') AS customer_name
+         FROM bookings b
+         LEFT JOIN users u ON b.user_id = u.id
+         WHERE b.court_id = $1
+           AND b.status IN ('CONFIRMED', 'COMPLETED', 'PENDING')
+           AND b.end_time > $2
+         ORDER BY b.start_time ASC
+         LIMIT 1`,
+        [courtId, startTime]
+      );
+
+      if (conflictRes.rows.length > 0) {
+        const conflict = conflictRes.rows[0];
+        const conflictTime = new Date(conflict.start_time).toLocaleString('vi-VN');
+        return res.status(400).json({
+          message: `Không thể bảo trì sân này vì đã có khách (${conflict.customer_name} - mã đơn #${conflict.booking_code}) đặt trước vào lúc ${conflictTime}. Vui lòng liên hệ hỗ trợ hoặc dời lịch khách trước khi kích hoạt bảo trì!`
+        });
+      }
+
+      const updated = await db.query(
+        `UPDATE courts
+         SET is_under_maintenance = TRUE,
+             maintenance_start = $1,
+             maintenance_note = $2
+         WHERE id = $3 AND tenant_id = $4
+         RETURNING *`,
+        [startTime, maintenanceNote || 'Bảo trì kỹ thuật sân', courtId, tenantId]
+      );
+
+      return res.json({
+        success: true,
+        message: 'Đã lên lịch bảo trì sân thành công. Khách hàng sẽ không thể đặt khung giờ bảo trì này nữa.',
+        court: updated.rows[0]
+      });
+    } else {
+      // Kết thúc bảo trì -> Mở lại sân
+      const updated = await db.query(
+        `UPDATE courts
+         SET is_under_maintenance = FALSE,
+             maintenance_start = NULL,
+             maintenance_note = NULL
+         WHERE id = $1 AND tenant_id = $2
+         RETURNING *`,
+        [courtId, tenantId]
+      );
+
+      return res.json({
+        success: true,
+        message: 'Đã hoàn tất bảo trì sân. Sân đã được mở lại phục vụ khách bình thường.',
+        court: updated.rows[0]
+      });
+    }
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi cập nhật trạng thái bảo trì sân.' });
   }
 };
 
@@ -264,6 +383,39 @@ exports.createPricingRule = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Lỗi khi thêm cấu hình giá động.' });
+  }
+};
+
+// 8b. Cập nhật Khung Giá Động
+exports.updatePricingRule = async (req, res) => {
+  const { ruleId } = req.params;
+  const { courtType, startTime, endTime, pricePerHour, daysOfWeek } = req.body;
+  const tenantId = req.tenant.id;
+
+  try {
+    const result = await db.query(
+      `UPDATE pricing_rules
+       SET court_type = COALESCE($1, court_type),
+           start_time = COALESCE($2, start_time),
+           end_time = COALESCE($3, end_time),
+           price_per_hour = COALESCE($4, price_per_hour),
+           days_of_week = COALESCE($5, days_of_week)
+       WHERE id = $6 AND tenant_id = $7 RETURNING *`,
+      [courtType, startTime, endTime, pricePerHour, daysOfWeek, ruleId, tenantId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy khung giá.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Đã cập nhật khung giá động thành công!',
+      rule: result.rows[0]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi cập nhật khung giá.' });
   }
 };
 
@@ -336,5 +488,156 @@ exports.getMyStaffList = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Lỗi khi tải danh sách Lễ tân.' });
+  }
+};
+
+// 12. Cập nhật thông tin Lễ tân & Đổi mật khẩu
+exports.updateStaffAccount = async (req, res) => {
+  const { id } = req.params;
+  const { fullName, phone, password, isActive } = req.body;
+  const tenantId = req.tenant.id;
+
+  try {
+    const staffRes = await db.query(
+      `SELECT * FROM users WHERE id = $1 AND tenant_id = $2 AND role = 'STAFF'`,
+      [id, tenantId]
+    );
+
+    if (staffRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy tài khoản lễ tân.' });
+    }
+
+    let passwordHash = staffRes.rows[0].password_hash;
+    if (password && password.trim().length > 0) {
+      const salt = await bcrypt.genSalt(10);
+      passwordHash = await bcrypt.hash(password, salt);
+    }
+
+    const updated = await db.query(
+      `UPDATE users
+       SET full_name = COALESCE($1, full_name),
+           phone = COALESCE($2, phone),
+           password_hash = $3,
+           is_active = COALESCE($4, is_active)
+       WHERE id = $5 AND tenant_id = $6
+       RETURNING id, full_name, email, phone, is_active, created_at`,
+      [fullName, phone, passwordHash, isActive, id, tenantId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Đã cập nhật thông tin lễ tân thành công!',
+      staff: updated.rows[0]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi cập nhật tài khoản lễ tân.' });
+  }
+};
+
+// 13. Xóa hoặc Vô hiệu hóa tài khoản Lễ tân
+exports.deleteStaffAccount = async (req, res) => {
+  const { id } = req.params;
+  const tenantId = req.tenant.id;
+
+  try {
+    const staffRes = await db.query(
+      `SELECT * FROM users WHERE id = $1 AND tenant_id = $2 AND role = 'STAFF'`,
+      [id, tenantId]
+    );
+    if (staffRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy tài khoản lễ tân.' });
+    }
+
+    // Kiểm tra xem lễ tân đã tạo hóa đơn POS hay vé vãng lai chưa
+    const usedRes = await db.query(
+      `SELECT 1 FROM bookings WHERE created_by_staff_id = $1
+       UNION
+       SELECT 1 FROM pos_orders WHERE staff_id = $1 LIMIT 1`,
+      [id]
+    );
+
+    if (usedRes.rows.length > 0) {
+      await db.query(`UPDATE users SET is_active = FALSE WHERE id = $1`, [id]);
+      return res.json({
+        success: true,
+        message: 'Tài khoản lễ tân này đã có lịch sử tạo đơn, hệ thống đã chuyển sang trạng thái Vô hiệu hóa để bảo đảm toàn vẹn dữ liệu.'
+      });
+    }
+
+    await db.query(`DELETE FROM users WHERE id = $1 AND tenant_id = $2`, [id, tenantId]);
+    res.json({ success: true, message: 'Đã xóa tài khoản lễ tân thành công!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi xóa tài khoản lễ tân.' });
+  }
+};
+
+// 14. Chủ sân tự xem toàn bộ Đánh giá & Nhận xét của Cụm sân mình
+exports.getMyReviews = async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT r.id, r.rating, r.comment, r.created_at,
+              u.full_name AS user_name, u.email AS user_email,
+              b.booking_code, c.name AS court_name
+       FROM reviews r
+       JOIN users u ON r.user_id = u.id
+       LEFT JOIN bookings b ON r.booking_id = b.id
+       LEFT JOIN courts c ON b.court_id = c.id
+       WHERE r.tenant_id = $1
+       ORDER BY r.created_at DESC`,
+      [req.tenant.id]
+    );
+
+    const statsRes = await db.query(
+      `SELECT COALESCE(ROUND(AVG(rating), 1), 0) AS avg_rating,
+              COUNT(id) AS total_reviews,
+              COUNT(id) FILTER (WHERE rating = 5) AS count_5,
+              COUNT(id) FILTER (WHERE rating = 4) AS count_4,
+              COUNT(id) FILTER (WHERE rating = 3) AS count_3,
+              COUNT(id) FILTER (WHERE rating = 2) AS count_2,
+              COUNT(id) FILTER (WHERE rating = 1) AS count_1
+       FROM reviews WHERE tenant_id = $1`,
+      [req.tenant.id]
+    );
+
+    res.json({
+      success: true,
+      reviews: result.rows,
+      stats: statsRes.rows[0]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi tải đánh giá của sân.' });
+  }
+};
+
+// 15. Cập nhật Hình ảnh, Điều khoản & Thông tin cụm sân
+exports.updateVenueDetails = async (req, res) => {
+  const tenantId = req.tenant.id;
+  const { name, district, address, phoneContact, description, images, rules } = req.body;
+
+  try {
+    const result = await db.query(
+      `UPDATE tenants SET
+        name = COALESCE($1, name),
+        district = COALESCE($2, district),
+        address = COALESCE($3, address),
+        phone_contact = COALESCE($4, phone_contact),
+        description = COALESCE($5, description),
+        images = COALESCE($6, images),
+        rules = COALESCE($7, rules)
+       WHERE id = $8 RETURNING *`,
+      [name, district, address, phoneContact, description, images, rules, tenantId]
+    );
+
+    res.json({
+      success: true,
+      message: 'Đã cập nhật thông tin, hình ảnh và điều khoản sân thành công!',
+      tenant: result.rows[0]
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi cập nhật thông tin cụm sân.' });
   }
 };

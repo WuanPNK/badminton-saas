@@ -81,6 +81,38 @@ exports.updateProduct = async (req, res) => {
   }
 };
 
+// 3b. XÓA SẢN PHẨM KHỎI KHO POS (KIỂM TRA LỊCH SỬ HÓA ĐƠN ĐỂ TRÁNH MẤT TOÀN VẸN)
+exports.deleteProduct = async (req, res) => {
+  const { productId } = req.params;
+  try {
+    const inUse = await db.query(
+      `SELECT 1 FROM pos_order_items WHERE product_id = $1 LIMIT 1`,
+      [productId]
+    );
+
+    if (inUse.rows.length > 0) {
+      await db.query(
+        `UPDATE products SET is_active = FALSE WHERE id = $1 AND tenant_id = $2`,
+        [productId, req.tenant.id]
+      );
+      return res.json({
+        success: true,
+        message: 'Mặt hàng này đã có trong lịch sử hóa đơn, hệ thống đã chuyển sang trạng thái Ngừng kinh doanh (Ẩn khỏi kho).'
+      });
+    }
+
+    await db.query(`DELETE FROM products WHERE id = $1 AND tenant_id = $2`, [
+      productId,
+      req.tenant.id
+    ]);
+
+    res.json({ success: true, message: 'Đã xóa mặt hàng khỏi kho POS!' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi xóa sản phẩm.' });
+  }
+};
+
 // 4. LỄ TÂN / CHỦ SÂN TẠO HÓA ĐƠN BÁN HÀNG TẠI QUẦY (CHECKOUT POS BẰNG TRANSACTION)
 exports.createPosOrder = async (req, res) => {
   const tenantId = req.tenant.id;

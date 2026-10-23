@@ -189,15 +189,21 @@ export default function VenueDetailModal({
 
               {venueDetailTab === 'IMAGES' && (
                 <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {gallery.map((imgUrl, i) => (
+                  {((selectedVenue.tenant.images && selectedVenue.tenant.images.length > 0)
+                    ? selectedVenue.tenant.images
+                    : gallery
+                  ).map((imgUrl, i) => (
                     <div
                       key={i}
-                      className="rounded-2xl overflow-hidden border border-slate-200 h-48 bg-slate-100"
+                      className="rounded-2xl overflow-hidden border border-slate-200 h-48 bg-slate-100 shadow-sm"
                     >
                       <img
                         src={imgUrl}
                         alt={`Hình ảnh sân ${i + 1}`}
                         className="w-full h-full object-cover hover:scale-105 transition duration-300"
+                        onError={(e) => {
+                          e.target.src = 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80';
+                        }}
                       />
                     </div>
                   ))}
@@ -210,17 +216,22 @@ export default function VenueDetailModal({
                     Nội quy & Quy định tại {selectedVenue.tenant.name}
                   </h4>
                   {selectedVenue.tenant.description && (
-                    <p className="p-3 bg-white rounded-xl border border-slate-200">
+                    <p className="p-3 bg-white rounded-xl border border-slate-200 font-medium">
                       {selectedVenue.tenant.description}
                     </p>
                   )}
                   <ul className="list-disc pl-5 space-y-2">
-                    <li>Vui lòng mang giày thể thao chuyên dụng hoặc không để lại vết đen trên mặt thảm.</li>
-                    <li>Có mặt trước giờ đặt 5–10 phút để làm thủ tục Check-in tại quầy Lễ tân.</li>
-                    <li>
-                      <strong>Quy định Hủy lịch & Hoàn tiền:</strong> Hoàn lại <strong>100% tiền sân</strong> khi thao tác hủy trước giờ chơi ít nhất <strong>24 tiếng</strong>.
-                    </li>
-                    <li>Không hút thuốc lá và xả rác trong khu vực thảm thi đấu.</li>
+                    {((selectedVenue.tenant.rules && selectedVenue.tenant.rules.length > 0)
+                      ? selectedVenue.tenant.rules
+                      : [
+                          'Vui lòng mang giày thể thao chuyên dụng hoặc không để lại vết đen trên mặt thảm.',
+                          'Có mặt trước giờ đặt 5–10 phút để làm thủ tục Check-in tại quầy Lễ tân.',
+                          'Quy định Hủy lịch & Hoàn tiền: Hoàn lại 100% tiền sân khi thao tác hủy trước giờ chơi ít nhất 24 tiếng.',
+                          'Không hút thuốc lá và xả rác trong khu vực thảm thi đấu.'
+                        ]
+                    ).map((rule, idx) => (
+                      <li key={idx}>{rule}</li>
+                    ))}
                   </ul>
                 </div>
               )}

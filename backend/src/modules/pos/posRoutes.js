@@ -24,6 +24,7 @@ router.use(
 router.get('/products', posController.getProducts);
 router.post('/products', authorizeRoles('TENANT_ADMIN'), posController.createProduct);
 router.put('/products/:productId', authorizeRoles('TENANT_ADMIN'), posController.updateProduct);
+router.delete('/products/:productId', authorizeRoles('TENANT_ADMIN'), posController.deleteProduct);
 
 router.post('/orders', posController.createPosOrder);
 router.get('/orders', posController.getPosOrders);

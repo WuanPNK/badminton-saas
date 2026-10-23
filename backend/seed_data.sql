@@ -30,8 +30,13 @@ VALUES
     ('22222222-2222-2222-2222-222222222222', 'TENANT_ADMIN', 'Trần Minh Tuấn (Chủ sân Thái Hà)', 'chusan2@gmail.com', '0902000002', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
     ('22222222-2222-2222-2222-222222222223', 'TENANT_ADMIN', 'Lê Văn Hùng (Chủ sân Thanh Xuân)', 'chusan3@gmail.com', '0902000003', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
 
-    -- Nhân viên Lễ tân của Cụm sân 1
-    ('33333333-3333-3333-3333-333333333331', 'STAFF', 'Phạm Thu Hà (Lễ tân Đông Đô)', 'letan1@gmail.com', '0903000001', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
+    -- 6 Nhân viên Lễ tân (Mỗi cụm sân có 2 lễ tân)
+    ('33333333-3333-3333-3333-333333333331', 'STAFF', 'Phạm Thu Hà (Lễ tân Đông Đô 1)', 'letan1@gmail.com', '0903000001', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
+    ('33333333-3333-3333-3333-333333333332', 'STAFF', 'Trần Quốc Huy (Lễ tân Đông Đô 2)', 'letan_dongdo2@gmail.com', '0903000012', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
+    ('33333333-3333-3333-3333-333333333333', 'STAFF', 'Nguyễn Hoàng Mai (Lễ tân Thái Hà 1)', 'letan_thaiha1@gmail.com', '0903000021', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
+    ('33333333-3333-3333-3333-333333333334', 'STAFF', 'Lê Anh Tuấn (Lễ tân Thái Hà 2)', 'letan_thaiha2@gmail.com', '0903000022', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
+    ('33333333-3333-3333-3333-333333333335', 'STAFF', 'Vũ Quỳnh Trang (Lễ tân Vũ Trọng Phụng 1)', 'letan_vutrongphung1@gmail.com', '0903000031', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
+    ('33333333-3333-3333-3333-333333333336', 'STAFF', 'Đặng Minh Quân (Lễ tân Vũ Trọng Phụng 2)', 'letan_vutrongphung2@gmail.com', '0903000032', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
 
     -- 3 Khách hàng (1 Sinh viên đã duyệt, 1 Sinh viên chờ duyệt, 1 Khách thường)
     ('44444444-4444-4444-4444-444444444441', 'USER', 'Đỗ Minh Đức (Sinh viên)', 'sinhvien@gmail.com', '0904000001', crypt('123456', gen_salt('bf', 10)), TRUE, 'VERIFIED', 'https://placehold.co/600x400?text=The+Sinh+Vien+Minh+Duc'),
@@ -91,10 +96,10 @@ VALUES
         'TCB', '1903456789001', 'LE VAN HUNG'
     );
 
--- Cập nhật tenant_id cho Chủ sân và Lễ tân
-UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1' WHERE id IN ('22222222-2222-2222-2222-222222222221', '33333333-3333-3333-3333-333333333331');
-UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2' WHERE id = '22222222-2222-2222-2222-222222222222';
-UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3' WHERE id = '22222222-2222-2222-2222-222222222223';
+-- Cập nhật tenant_id cho Chủ sân và 6 Lễ tân (Mỗi cụm sân 2 lễ tân)
+UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1' WHERE id IN ('22222222-2222-2222-2222-222222222221', '33333333-3333-3333-3333-333333333331', '33333333-3333-3333-3333-333333333332');
+UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2' WHERE id IN ('22222222-2222-2222-2222-222222222222', '33333333-3333-3333-3333-333333333333', '33333333-3333-3333-3333-333333333334');
+UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3' WHERE id IN ('22222222-2222-2222-2222-222222222223', '33333333-3333-3333-3333-333333333335', '33333333-3333-3333-3333-333333333336');
 
 -- =========================================================
 -- 3. DỮ LIỆU GÓI CƯỚC & DOANH THU PHẦN MỀM CHO SUPER ADMIN

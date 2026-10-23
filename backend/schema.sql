@@ -114,6 +114,10 @@ CREATE TABLE tenants (
     qr_account_number VARCHAR(50),
     qr_account_name VARCHAR(100),
 
+    -- Hình ảnh & Điều khoản nội quy của Cụm sân
+    images TEXT[] DEFAULT '{}',
+    rules TEXT[] DEFAULT '{}',
+
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -144,6 +148,8 @@ CREATE TABLE courts (
     type court_type DEFAULT 'STANDARD',
     status approval_status DEFAULT 'PENDING', -- Super Admin duyệt mới chuyển thành PUBLISHED
     is_under_maintenance BOOLEAN DEFAULT FALSE,
+    maintenance_start TIMESTAMP,
+    maintenance_note TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

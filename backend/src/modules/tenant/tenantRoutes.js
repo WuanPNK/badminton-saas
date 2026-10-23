@@ -51,11 +51,27 @@ router.post(
 );
 
 router.put(
+  '/courts/:courtId',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  verifyActiveTenant,
+  tenantController.updateCourt
+);
+
+router.delete(
+  '/courts/:courtId',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  verifyActiveTenant,
+  tenantController.deleteCourt
+);
+
+router.put(
   '/courts/:courtId/maintenance',
   verifyToken,
   authorizeRoles('TENANT_ADMIN'),
   verifyActiveTenant,
-  tenantController.toggleCourtMaintenance
+  tenantController.scheduleCourtMaintenance
 );
 
 router.post(
@@ -64,6 +80,14 @@ router.post(
   authorizeRoles('TENANT_ADMIN'),
   verifyActiveTenant,
   tenantController.createPricingRule
+);
+
+router.put(
+  '/pricing-rules/:ruleId',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  verifyActiveTenant,
+  tenantController.updatePricingRule
 );
 
 router.delete(
@@ -88,6 +112,38 @@ router.get(
   authorizeRoles('TENANT_ADMIN'),
   verifyActiveTenant,
   tenantController.getMyStaffList
+);
+
+router.put(
+  '/staff/:id',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  verifyActiveTenant,
+  tenantController.updateStaffAccount
+);
+
+router.delete(
+  '/staff/:id',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  verifyActiveTenant,
+  tenantController.deleteStaffAccount
+);
+
+router.get(
+  '/reviews',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  verifyActiveTenant,
+  tenantController.getMyReviews
+);
+
+router.put(
+  '/venue-details',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  verifyActiveTenant,
+  tenantController.updateVenueDetails
 );
 
 module.exports = router;
