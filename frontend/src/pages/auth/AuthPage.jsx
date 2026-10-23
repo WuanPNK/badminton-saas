@@ -4,7 +4,9 @@ import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 
 export default function AuthPage() {
+  // mode: 'LOGIN' | 'REGISTER_USER' | 'REGISTER_TENANT' | 'FORGOT_PASSWORD'
   const [mode, setMode] = useState('LOGIN');
+  const [showRegisterPopup, setShowRegisterPopup] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -17,9 +19,11 @@ export default function AuthPage() {
     email: '',
     phone: '',
     password: '',
+    confirmPassword: '',
     otpCode: '',
     isStudent: false,
-    studentCardUrl: '',
+    studentCardImage: '',
+    studentCardFileName: '',
     tenantName: '',
     district: 'Cầu Giấy',
     address: '',
@@ -33,32 +37,81 @@ export default function AuthPage() {
     }));
   };
 
+  // Xử lý chọn file ảnh trực tiếp từ thiết bị
+  const handleFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      return setMessage({ type: 'error', text: 'Vui lòng chọn tệp định dạng hình ảnh (JPG, PNG, WEBP).' });
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      return setMessage({ type: 'error', text: 'Kích thước ảnh tối đa là 5MB.' });
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setForm((prev) => ({
+        ...prev,
+        studentCardImage: reader.result,
+        studentCardFileName: file.name,
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const switchMode = (newMode) => {
+    setMode(newMode);
+    setShowRegisterPopup(false);
+    setOtpSent(false);
+    setMessage({ type: '', text: '' });
+    setForm((prev) => ({
+      ...prev,
+      password: '',
+      confirmPassword: '',
+      otpCode: '',
+    }));
+  };
+
+  // Gửi OTP (Dùng cho cả Đăng ký và Quên mật khẩu)
   const handleSendOtp = async (e) => {
     e.preventDefault();
     if (!form.email) {
-      return setMessage({ type: 'error', text: 'Vui lòng nhập Email để nhận mã OTP.' });
+      return setMessage({ type: 'error', text: 'Vui lòng nhập địa chỉ Email để nhận mã OTP.' });
     }
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
+      const purpose = mode === 'FORGOT_PASSWORD' ? 'RESET_PASSWORD' : 'REGISTER';
       const res = await axiosClient.post('/auth/send-otp', {
         email: form.email,
-        purpose: 'REGISTER',
+        purpose,
       });
       setOtpSent(true);
       setMessage({ type: 'success', text: res.data.message });
     } catch (err) {
       setMessage({
         type: 'error',
-        text: err.response?.data?.message || 'Không thể gửi OTP. Kiểm tra cấu hình Gmail Backend.',
+        text: err.response?.data?.message || 'Không thể gửi OTP. Vui lòng kiểm tra lại.',
       });
     } finally {
       setLoading(false);
     }
   };
 
+  // Đăng ký tài khoản (Kiểm tra khớp mật khẩu & ảnh tải lên)
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (form.password.length < 6) {
+      return setMessage({ type: 'error', text: 'Mật khẩu phải có tối thiểu 6 ký tự.' });
+    }
+    if (form.password !== form.confirmPassword) {
+      return setMessage({ type: 'error', text: 'Mật khẩu nhập lại không khớp. Vui lòng kiểm tra lại!' });
+    }
+    if (mode === 'REGISTER_USER' && form.isStudent && !form.studentCardImage) {
+      return setMessage({ type: 'error', text: 'Vui lòng tải lên ảnh chụp Thẻ Học sinh / Sinh viên.' });
+    }
+
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
@@ -73,13 +126,14 @@ export default function AuthPage() {
         district: form.district,
         address: form.address,
         isStudent: mode === 'REGISTER_USER' ? form.isStudent : false,
-        studentCardUrl: form.studentCardUrl,
+        studentCardImage: form.studentCardImage,
       };
 
       const res = await axiosClient.post('/auth/register', payload);
       setMessage({ type: 'success', text: res.data.message });
       setOtpSent(false);
       setMode('LOGIN');
+      setForm((prev) => ({ ...prev, password: '', confirmPassword: '', otpCode: '' }));
     } catch (err) {
       setMessage({
         type: 'error',
@@ -90,6 +144,39 @@ export default function AuthPage() {
     }
   };
 
+  // Đặt lại mật khẩu bằng OTP
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (form.password.length < 6) {
+      return setMessage({ type: 'error', text: 'Mật khẩu mới phải có tối thiểu 6 ký tự.' });
+    }
+    if (form.password !== form.confirmPassword) {
+      return setMessage({ type: 'error', text: 'Mật khẩu nhập lại không khớp!' });
+    }
+
+    setLoading(true);
+    setMessage({ type: '', text: '' });
+    try {
+      const res = await axiosClient.post('/auth/reset-password', {
+        email: form.email,
+        otpCode: form.otpCode,
+        newPassword: form.password,
+      });
+      setMessage({ type: 'success', text: res.data.message });
+      setOtpSent(false);
+      setMode('LOGIN');
+      setForm((prev) => ({ ...prev, password: '', confirmPassword: '', otpCode: '' }));
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text: err.response?.data?.message || 'Không thể đặt lại mật khẩu.',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Đăng nhập
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -117,195 +204,235 @@ export default function AuthPage() {
     }
   };
 
-  const switchMode = (newMode) => {
-    setMode(newMode);
-    setOtpSent(false);
-    setMessage({ type: '', text: '' });
-  };
+  const isRegisterMode = mode === 'REGISTER_USER' || mode === 'REGISTER_TENANT';
+  const passwordMismatch =
+    form.confirmPassword.length > 0 && form.password !== form.confirmPassword;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 md:p-8">
-      <div className="bg-white w-full max-w-5xl rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.08)] border border-slate-100 overflow-hidden grid lg:grid-cols-12">
+    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 sm:p-6">
+      {/* CARD ĐƠN GIẢN TRUNG TÂM (ĐÃ XOÁ BANNER BÊN TRÁI) */}
+      <div className="bg-white w-full max-w-lg rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.07)] border border-slate-100 p-6 sm:p-10">
         
-        {/* CỘT TRÁI: BANNER GIỚI THIỆU HỆ THỐNG */}
-        <div className="lg:col-span-5 bg-gradient-to-br from-emerald-900 via-emerald-800 to-slate-900 text-white p-8 md:p-10 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute -top-24 -left-24 w-64 h-64 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none"></div>
-          <div className="absolute -bottom-24 -right-24 w-64 h-64 bg-teal-400/20 rounded-full blur-3xl pointer-events-none"></div>
+        {/* TIÊU ĐỀ */}
+        <div className="mb-6">
+          <h2 className="text-2xl font-extrabold text-slate-900">
+            {mode === 'LOGIN' && 'Chào mừng trở lại!'}
+            {mode === 'REGISTER_USER' && 'Đăng ký Tài khoản Người chơi'}
+            {mode === 'REGISTER_TENANT' && 'Đăng ký Đối tác Quản lý sân'}
+            {mode === 'FORGOT_PASSWORD' && 'Khôi phục mật khẩu'}
+          </h2>
+          <p className="text-xs text-slate-500 mt-1">
+            {mode === 'LOGIN' && 'Đăng nhập để vào bảng điều khiển tương ứng với vai trò của bạn.'}
+            {mode === 'REGISTER_USER' && 'Xác thực email bằng OTP để đặt lịch sân và nhận ưu đãi Học sinh / Sinh viên.'}
+            {mode === 'REGISTER_TENANT' && 'Đưa cụm sân cầu lông của bạn lên nền tảng và quản lý vận hành tự động.'}
+            {mode === 'FORGOT_PASSWORD' && 'Nhập email của bạn để nhận mã OTP 6 số và thiết lập lại mật khẩu mới.'}
+          </p>
+        </div>
 
-          <div className="relative z-10">
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-md px-3.5 py-1.5 rounded-full text-xs font-bold tracking-wide text-emerald-300 border border-white/10 mb-6">
-              <span>🏸</span> BADMINTON SAAS PLATFORM
-            </div>
-            <h1 className="text-3xl font-extrabold leading-tight tracking-tight">
-              Đặt Sân Trực Quan & Quản Trị Đa Cụm Sân
-            </h1>
-            <p className="text-sm text-emerald-100/80 mt-3 leading-relaxed">
-              Nền tảng kết nối người chơi cầu lông và chủ sân với hệ thống tính giá động theo khung giờ, thanh toán VietQR tự động và quản lý bán hàng POS.
-            </p>
-          </div>
+        {/* THANH CHUYỂN ĐỔI 2 CỘT: ĐĂNG NHẬP & ĐĂNG KÝ (CÓ POP-UP KHI DI CHUỘT) */}
+        <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1.5 rounded-2xl mb-6 text-xs font-bold relative">
+          {/* CỘT 1: ĐĂNG NHẬP */}
+          <button
+            type="button"
+            onClick={() => switchMode('LOGIN')}
+            className={`py-2.5 rounded-xl transition-all ${
+              mode === 'LOGIN'
+                ? 'bg-white text-emerald-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            Đăng nhập
+          </button>
 
-          <div className="relative z-10 space-y-3 mt-8 pt-8 border-t border-white/10 text-xs text-emerald-100/90">
-            <div className="flex items-center gap-3">
-              <span className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center font-bold text-emerald-300">✓</span>
-              <span>Đặt lịch chẵn block 30 phút, giữ chỗ tức thì</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center font-bold text-emerald-300">🎓</span>
-              <span>Tự động áp dụng chiết khấu cho Học sinh / Sinh viên</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="w-7 h-7 rounded-lg bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center font-bold text-emerald-300">⚡</span>
-              <span>Tích hợp POS bán hàng tại quầy & Báo cáo chuyên sâu</span>
-            </div>
+          {/* CỘT 2: ĐĂNG KÝ + HOVER POP-UP NHƯ ẢNH 5 */}
+          <div
+            className="relative"
+            onMouseEnter={() => setShowRegisterPopup(true)}
+            onMouseLeave={() => setShowRegisterPopup(false)}
+          >
+            <button
+              type="button"
+              onClick={() => setShowRegisterPopup((prev) => !prev)}
+              className={`w-full py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5 ${
+                isRegisterMode
+                  ? 'bg-white text-emerald-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>
+                {mode === 'REGISTER_USER'
+                  ? 'Đăng ký: Người chơi'
+                  : mode === 'REGISTER_TENANT'
+                  ? 'Đăng ký: Đối tác sân'
+                  : 'Đăng ký'}
+              </span>
+              <svg
+                className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                  showRegisterPopup ? 'rotate-180' : ''
+                }`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2.5}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+
+            {/* POP-UP MENU XỔ XUỐNG */}
+            {showRegisterPopup && (
+              <div className="absolute right-0 left-0 top-full pt-2 z-30">
+                <div className="bg-white rounded-2xl shadow-[0_15px_40px_-10px_rgba(0,0,0,0.15)] border border-slate-100 p-2 space-y-1">
+                  <button
+                    type="button"
+                    onClick={() => switchMode('REGISTER_USER')}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition flex items-start gap-3 ${
+                      mode === 'REGISTER_USER'
+                        ? 'bg-emerald-50 text-emerald-800'
+                        : 'hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <span className="text-base mt-0.5">🏸</span>
+                    <div>
+                      <div className="font-bold text-xs text-slate-900">Dành cho Người chơi</div>
+                      <div className="text-[11px] font-normal text-slate-500">
+                        Tìm kiếm & đặt lịch sân cầu lông
+                      </div>
+                    </div>
+                  </button>
+
+                  <div className="border-t border-slate-100 my-1"></div>
+
+                  <button
+                    type="button"
+                    onClick={() => switchMode('REGISTER_TENANT')}
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition flex items-start gap-3 ${
+                      mode === 'REGISTER_TENANT'
+                        ? 'bg-emerald-50 text-emerald-800'
+                        : 'hover:bg-slate-50 text-slate-700'
+                    }`}
+                  >
+                    <span className="text-base mt-0.5">🏟️</span>
+                    <div>
+                      <div className="font-bold text-xs text-slate-900">Đối tác Quản lý sân</div>
+                      <div className="text-[11px] font-normal text-slate-500">
+                        Đăng ký đưa cụm sân lên nền tảng
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* CỘT PHẢI: FORM ĐĂNG NHẬP / ĐĂNG KÝ */}
-        <div className="lg:col-span-7 p-6 sm:p-10 flex flex-col justify-center">
-          <div className="mb-6">
-            <h2 className="text-2xl font-extrabold text-slate-900">
-              {mode === 'LOGIN' && 'Chào mừng trở lại!'}
-              {mode === 'REGISTER_USER' && 'Tạo tài khoản Người chơi'}
-              {mode === 'REGISTER_TENANT' && 'Đăng ký Đối tác Chủ sân'}
-            </h2>
-            <p className="text-xs text-slate-500 mt-1">
-              {mode === 'LOGIN' && 'Đăng nhập để vào bảng điều khiển tương ứng với vai trò của bạn.'}
-              {mode === 'REGISTER_USER' && 'Xác thực email bằng OTP để đặt sân và nhận ưu đãi Sinh viên.'}
-              {mode === 'REGISTER_TENANT' && 'Đưa cụm sân của bạn lên nền tảng và quản lý vận hành tự động.'}
-            </p>
+        {/* THÔNG BÁO LỖI / THÀNH CÔNG */}
+        {message.text && (
+          <div
+            className={`p-3.5 rounded-2xl text-xs mb-5 font-semibold flex items-center gap-2.5 ${
+              message.type === 'error'
+                ? 'bg-red-50 text-red-700 border border-red-200'
+                : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+            }`}
+          >
+            <span className="text-base">{message.type === 'error' ? '⚠️' : '✅'}</span>
+            <span>{message.text}</span>
           </div>
+        )}
 
-          {/* THANH CHUYỂN CHẾ ĐỘ */}
-          <div className="grid grid-cols-3 gap-1.5 bg-slate-100 p-1.5 rounded-2xl mb-6 text-xs font-bold">
-            <button
-              type="button"
-              onClick={() => switchMode('LOGIN')}
-              className={`py-2.5 rounded-xl transition-all ${
-                mode === 'LOGIN'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              Đăng nhập
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('REGISTER_USER')}
-              className={`py-2.5 rounded-xl transition-all ${
-                mode === 'REGISTER_USER'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              ĐK Khách hàng
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('REGISTER_TENANT')}
-              className={`py-2.5 rounded-xl transition-all ${
-                mode === 'REGISTER_TENANT'
-                  ? 'bg-white text-emerald-700 shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              ĐK Chủ sân
-            </button>
-          </div>
-
-          {/* THÔNG BÁO LỖI / THÀNH CÔNG */}
-          {message.text && (
-            <div
-              className={`p-3.5 rounded-2xl text-xs mb-5 font-semibold flex items-center gap-2.5 ${
-                message.type === 'error'
-                  ? 'bg-red-50 text-red-700 border border-red-200'
-                  : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
-              }`}
-            >
-              <span className="text-base">{message.type === 'error' ? '⚠️' : '✅'}</span>
-              <span>{message.text}</span>
+        {/* ================= 1. FORM ĐĂNG NHẬP ================= */}
+        {mode === 'LOGIN' && (
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Địa chỉ Email</label>
+              <input
+                type="email"
+                name="email"
+                required
+                value={form.email}
+                onChange={handleChange}
+                placeholder="nhap@email.com"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
             </div>
-          )}
 
-          {/* FORM ĐĂNG NHẬP */}
-          {mode === 'LOGIN' && (
-            <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-xs font-bold text-slate-700">Mật khẩu</label>
+                <button
+                  type="button"
+                  onClick={() => switchMode('FORGOT_PASSWORD')}
+                  className="text-xs font-bold text-emerald-600 hover:text-emerald-700 hover:underline"
+                >
+                  Quên mật khẩu?
+                </button>
+              </div>
+              <input
+                type="password"
+                name="password"
+                required
+                value={form.password}
+                onChange={handleChange}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+              />
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-[0_4px_14px_0_rgba(5,150,105,0.35)] active:scale-[0.99]"
+            >
+              {loading ? 'Đang xác thực...' : 'Đăng nhập vào hệ thống →'}
+            </button>
+          </form>
+        )}
+
+        {/* ================= 2. FORM ĐĂNG KÝ (NGƯỜI CHƠI & ĐỐI TÁC SÂN) ================= */}
+        {isRegisterMode && (
+          <form onSubmit={handleRegister} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Họ và tên đầy đủ</label>
+              <input
+                type="text"
+                name="fullName"
+                required
+                value={form.fullName}
+                onChange={handleChange}
+                placeholder="Nguyễn Văn A"
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Địa chỉ Email</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Email (Nhận mã OTP)</label>
                 <input
                   type="email"
                   name="email"
                   required
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="nhap@email.com"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Mật khẩu</label>
-                <input
-                  type="password"
-                  name="password"
-                  required
-                  value={form.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-[0_4px_14px_0_rgba(5,150,105,0.35)] active:scale-[0.99]"
-              >
-                {loading ? 'Đang xác thực...' : 'Đăng nhập vào hệ thống →'}
-              </button>
-            </form>
-          )}
-
-          {/* FORM ĐĂNG KÝ (KHÁCH HÀNG HOẶC CHỦ SÂN) */}
-          {mode !== 'LOGIN' && (
-            <form onSubmit={handleRegister} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Họ và tên đầy đủ</label>
-                <input
-                  type="text"
-                  name="fullName"
-                  required
-                  value={form.fullName}
-                  onChange={handleChange}
-                  placeholder="Nguyễn Văn A"
+                  placeholder="email@gmail.com"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
-
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Email (Nhận mã OTP)</label>
-                  <input
-                    type="email"
-                    name="email"
-                    required
-                    value={form.email}
-                    onChange={handleChange}
-                    placeholder="email@gmail.com"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Số điện thoại</label>
-                  <input
-                    type="text"
-                    name="phone"
-                    required
-                    value={form.phone}
-                    onChange={handleChange}
-                    placeholder="0987654321"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Số điện thoại</label>
+                <input
+                  type="text"
+                  name="phone"
+                  required
+                  value={form.phone}
+                  onChange={handleChange}
+                  placeholder="0987654321"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
               </div>
+            </div>
 
+            {/* MẬT KHẨU KHỞI TẠO & NHẬP LẠI MẬT KHẨU */}
+            <div className="grid sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Mật khẩu khởi tạo</label>
                 <input
@@ -318,126 +445,266 @@ export default function AuthPage() {
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Nhập lại mật khẩu</label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  required
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Nhập lại mật khẩu"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 ${
+                    passwordMismatch
+                      ? 'border-red-400 focus:ring-red-500'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
+                />
+              </div>
+            </div>
+            {passwordMismatch && (
+              <p className="text-[11px] text-red-600 font-semibold -mt-2">
+                ⚠️ Mật khẩu nhập lại chưa khớp với mật khẩu khởi tạo.
+              </p>
+            )}
 
-              {/* TÙY CHỌN THẺ SINH VIÊN */}
-              {mode === 'REGISTER_USER' && (
-                <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200/80 space-y-3">
-                  <label className="flex items-center gap-2.5 text-xs font-bold text-emerald-950 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      name="isStudent"
-                      checked={form.isStudent}
-                      onChange={handleChange}
-                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
-                    />
-                    <span>🎓 Tôi là Học sinh / Sinh viên (Nhận ưu đãi giảm giá tự động)</span>
-                  </label>
+            {/* TÙY CHỌN THẺ SINH VIÊN: TẢI ẢNH TRỰC TIẾP TỪ MÁY */}
+            {mode === 'REGISTER_USER' && (
+              <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200/80 space-y-3">
+                <label className="flex items-center gap-2.5 text-xs font-bold text-emerald-950 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    name="isStudent"
+                    checked={form.isStudent}
+                    onChange={handleChange}
+                    className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>🎓 Tôi là Học sinh / Sinh viên (Nhận ưu đãi giảm giá tự động)</span>
+                </label>
 
-                  {form.isStudent && (
-                    <div className="pt-1">
-                      <label className="block text-[11px] font-semibold text-emerald-800 mb-1">
-                        Dán link ảnh chụp Thẻ Học sinh / Sinh viên để Super Admin duyệt:
-                      </label>
+                {form.isStudent && (
+                  <div className="pt-1 space-y-2">
+                    <label className="block text-[11px] font-semibold text-emerald-800">
+                      Tải lên ảnh chụp Thẻ Học sinh / Sinh viên để Super Admin duyệt:
+                    </label>
+
+                    <label className="flex flex-col items-center justify-center w-full p-4 bg-white border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-50/40 transition">
+                      {form.studentCardImage ? (
+                        <div className="text-center space-y-2">
+                          <img
+                            src={form.studentCardImage}
+                            alt="Xem trước thẻ sinh viên"
+                            className="max-h-36 mx-auto rounded-lg border border-slate-200 object-contain"
+                          />
+                          <p className="text-[11px] font-bold text-emerald-700">
+                            ✓ {form.studentCardFileName} (Bấm để đổi ảnh khác)
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center py-2">
+                          <span className="text-2xl">📷</span>
+                          <p className="text-xs font-bold text-emerald-800 mt-1">
+                            Bấm để chọn ảnh thẻ từ thiết bị
+                          </p>
+                          <p className="text-[11px] text-slate-400">Hỗ trợ PNG, JPG, WEBP (Tối đa 5MB)</p>
+                        </div>
+                      )}
                       <input
-                        type="text"
-                        name="studentCardUrl"
-                        required
-                        value={form.studentCardUrl}
-                        onChange={handleChange}
-                        placeholder="https://i.imgur.com/the-sinh-vien.jpg"
-                        className="w-full px-3 py-2 bg-white border border-emerald-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
                       />
-                    </div>
-                  )}
+                    </label>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* THÔNG TIN ĐỐI TÁC QUẢN LÝ SÂN */}
+            {mode === 'REGISTER_TENANT' && (
+              <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200 space-y-3">
+                <div className="flex items-center gap-2 text-xs font-extrabold text-amber-900">
+                  <span>🏟️</span>
+                  <span>Thông tin Cụm sân đăng ký đối tác (Chờ Super Admin duyệt)</span>
                 </div>
-              )}
-
-              {/* THÔNG TIN ĐỐI TÁC CHỦ SÂN */}
-              {mode === 'REGISTER_TENANT' && (
-                <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-extrabold text-amber-900">
-                    <span>🏟️</span>
-                    <span>Thông tin Cụm sân đăng ký đối tác (Chờ Super Admin duyệt)</span>
-                  </div>
-                  <div className="grid sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Tên Cụm sân</label>
-                      <input
-                        type="text"
-                        name="tenantName"
-                        required
-                        value={form.tenantName}
-                        onChange={handleChange}
-                        placeholder="VD: Sân Cầu Lông Đông Đô"
-                        className="w-full px-3 py-2 border border-amber-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-700 mb-1">Quận / Khu vực</label>
-                      <select
-                        name="district"
-                        value={form.district}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 border border-amber-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      >
-                        <option value="Cầu Giấy">Quận Cầu Giấy</option>
-                        <option value="Đống Đa">Quận Đống Đa</option>
-                        <option value="Thanh Xuân">Quận Thanh Xuân</option>
-                        <option value="Hai Bà Trưng">Quận Hai Bà Trưng</option>
-                        <option value="Hoàng Mai">Quận Hoàng Mai</option>
-                        <option value="Nam Từ Liêm">Quận Nam Từ Liêm</option>
-                      </select>
-                    </div>
-                  </div>
+                <div className="grid sm:grid-cols-2 gap-2.5">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Địa chỉ chi tiết</label>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Tên Cụm sân</label>
                     <input
                       type="text"
-                      name="address"
+                      name="tenantName"
                       required
-                      value={form.address}
+                      value={form.tenantName}
                       onChange={handleChange}
-                      placeholder="Số 102 Chùa Láng, Hà Nội"
+                      placeholder="VD: Sân Cầu Lông Đông Đô"
                       className="w-full px-3 py-2 border border-amber-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Quận / Khu vực</label>
+                    <select
+                      name="district"
+                      value={form.district}
+                      onChange={handleChange}
+                      className="w-full px-3 py-2 border border-amber-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="Cầu Giấy">Quận Cầu Giấy</option>
+                      <option value="Đống Đa">Quận Đống Đa</option>
+                      <option value="Thanh Xuân">Quận Thanh Xuân</option>
+                      <option value="Hai Bà Trưng">Quận Hai Bà Trưng</option>
+                      <option value="Hoàng Mai">Quận Hoàng Mai</option>
+                      <option value="Nam Từ Liêm">Quận Nam Từ Liêm</option>
+                    </select>
+                  </div>
                 </div>
-              )}
-
-              {/* XÁC THỰC OTP */}
-              <div className="pt-2 border-t border-slate-100">
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">Mã xác thực Email (OTP)</label>
-                <div className="flex gap-2">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">Địa chỉ chi tiết</label>
                   <input
                     type="text"
-                    name="otpCode"
+                    name="address"
                     required
-                    value={form.otpCode}
+                    value={form.address}
                     onChange={handleChange}
-                    placeholder="Nhập mã OTP 6 số..."
-                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-widest focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Số 102 Chùa Láng, Hà Nội"
+                    className="w-full px-3 py-2 border border-amber-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
-                  <button
-                    type="button"
-                    onClick={handleSendOtp}
-                    disabled={loading}
-                    className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition"
-                  >
-                    {otpSent ? 'Gửi lại OTP' : 'Nhận mã OTP'}
-                  </button>
                 </div>
               </div>
+            )}
 
+            {/* XÁC THỰC OTP */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">Mã xác thực Email (OTP)</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  name="otpCode"
+                  required
+                  value={form.otpCode}
+                  onChange={handleChange}
+                  placeholder="Nhập mã OTP 6 số..."
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-widest focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={loading}
+                  className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition"
+                >
+                  {otpSent ? 'Gửi lại OTP' : 'Nhận mã OTP'}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={loading || !otpSent || passwordMismatch}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-sm"
+            >
+              {loading ? 'Đang xử lý...' : 'Xác nhận OTP & Hoàn tất Đăng ký'}
+            </button>
+          </form>
+        )}
+
+        {/* ================= 3. FORM QUÊN MẬT KHẨU (RESET QUA OTP GMAIL) ================= */}
+        {mode === 'FORGOT_PASSWORD' && (
+          <form onSubmit={handleResetPassword} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Email tài khoản đã đăng ký
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  name="email"
+                  required
+                  value={form.email}
+                  onChange={handleChange}
+                  placeholder="nhap@gmail.com"
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={handleSendOtp}
+                  disabled={loading}
+                  className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition"
+                >
+                  {otpSent ? 'Gửi lại OTP' : 'Gửi mã OTP'}
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Mã xác thực OTP (Gửi về Gmail)
+              </label>
+              <input
+                type="text"
+                name="otpCode"
+                required
+                value={form.otpCode}
+                onChange={handleChange}
+                placeholder="Nhập 6 chữ số OTP..."
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-widest focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Mật khẩu mới</label>
+                <input
+                  type="password"
+                  name="password"
+                  required
+                  value={form.password}
+                  onChange={handleChange}
+                  placeholder="Tối thiểu 6 ký tự"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Nhập lại mật khẩu mới</label>
+                <input
+                  type="password"
+                  name="confirmPassword"
+                  required
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  placeholder="Xác nhận mật khẩu"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 ${
+                    passwordMismatch
+                      ? 'border-red-400 focus:ring-red-500'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
+                />
+              </div>
+            </div>
+            {passwordMismatch && (
+              <p className="text-[11px] text-red-600 font-semibold -mt-2">
+                ⚠️ Mật khẩu nhập lại chưa khớp.
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading || !otpSent || passwordMismatch}
+              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-sm"
+            >
+              {loading ? 'Đang cập nhật...' : 'Xác nhận Đặt lại Mật khẩu'}
+            </button>
+
+            <div className="text-center pt-1">
               <button
-                type="submit"
-                disabled={loading || !otpSent}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-200 disabled:text-slate-400 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-sm"
+                type="button"
+                onClick={() => switchMode('LOGIN')}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800"
               >
-                {loading ? 'Đang xử lý...' : 'Xác nhận OTP & Hoàn tất Đăng ký'}
+                ← Quay lại màn hình Đăng nhập
               </button>
-            </form>
-          )}
-        </div>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

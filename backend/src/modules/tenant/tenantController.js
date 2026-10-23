@@ -43,16 +43,21 @@ exports.getMarketplaceTenants = async (req, res) => {
   }
 };
 
-// 2. Xem chi tiết 1 Cụm sân (Các sân đã PUBLISHED + Bảng giá động + Đánh giá)
+// 2. Xem chi tiết 1 Cụm sân (Các sân đã PUBLISHED + Bảng giá động + Đánh giá chi tiết)
 exports.getTenantPublicDetail = async (req, res) => {
   const { id } = req.params;
 
   try {
     const tenantRes = await db.query(
-      `SELECT id, name, district, address, phone_contact, description,
-              student_discount_type, student_discount_value,
-              qr_bank_name, qr_account_number, qr_account_name
-       FROM tenants WHERE id = $1 AND status = 'ACTIVE'`,
+      `SELECT t.id, t.name, t.district, t.address, t.phone_contact, t.description,
+              t.student_discount_type, t.student_discount_value,
+              t.qr_bank_name, t.qr_account_number, t.qr_account_name,
+              COALESCE(ROUND(AVG(r.rating), 1), 0) AS avg_rating,
+              COUNT(DISTINCT r.id) AS total_reviews
+       FROM tenants t
+       LEFT JOIN reviews r ON t.id = r.tenant_id
+       WHERE t.id = $1 AND t.status = 'ACTIVE'
+       GROUP BY t.id`,
       [id]
     );
 
@@ -77,11 +82,15 @@ exports.getTenantPublicDetail = async (req, res) => {
     );
 
     const reviewsRes = await db.query(
-      `SELECT r.id, r.rating, r.comment, r.created_at, u.full_name AS user_name
+      `SELECT r.id, r.rating, r.comment, r.created_at,
+              u.full_name AS user_name,
+              c.name AS court_name
        FROM reviews r
        JOIN users u ON r.user_id = u.id
+       LEFT JOIN bookings b ON r.booking_id = b.id
+       LEFT JOIN courts c ON b.court_id = c.id
        WHERE r.tenant_id = $1
-       ORDER BY r.created_at DESC LIMIT 20`,
+       ORDER BY r.created_at DESC LIMIT 30`,
       [id]
     );
 
@@ -235,7 +244,6 @@ exports.toggleCourtMaintenance = async (req, res) => {
 exports.createPricingRule = async (req, res) => {
   const tenantId = req.tenant.id;
   const { courtType, startTime, endTime, pricePerHour, daysOfWeek } = req.body;
-  // Ví dụ: startTime = "17:00", endTime = "22:00", pricePerHour = 120000, daysOfWeek = [1,2,3,4,5]
 
   if (!courtType || !startTime || !endTime || !pricePerHour || !Array.isArray(daysOfWeek)) {
     return res.status(400).json({ message: 'Vui lòng điền đầy đủ thông tin khung giờ và giá.' });
