@@ -51,6 +51,20 @@ export default function TenantBookingPage() {
   // Modal Thanh toán VietQR 100%
   const [paymentData, setPaymentData] = useState(null);
 
+  // Trạng thái kéo chuột trên lưới (Drag selection)
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [dragStartInfo, setDragStartInfo] = useState(null);
+  const [hasDragged, setHasDragged] = useState(false);
+
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      setIsMouseDown(false);
+      setDragStartInfo(null);
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, []);
+
   useEffect(() => {
     axiosClient.get(`/tenant/marketplace/${tenantId}`).then((res) => {
       setTenantDetail(res.data.data);
@@ -145,8 +159,62 @@ export default function TenantBookingPage() {
     return true;
   };
 
-  // Xử lý khi khách bấm vào 1 ô 30 phút trên Bảng Lưới (Hình 7)
+  // 1. Nhấn chuột xuống trên 1 ô 30 phút (Hỗ trợ kéo chuột chọn nhiều ô liên tục)
+  const handleCellMouseDown = (court, block, e) => {
+    if (e.button !== 0) return; // Chỉ nhận chuột trái
+    const cellState = getCellBookingState(court, block);
+    if (['BOOKED', 'EVENT', 'MAINTENANCE'].includes(cellState.status)) {
+      return;
+    }
+
+    setIsMouseDown(true);
+    setHasDragged(false);
+    setDragStartInfo({ courtId: court.id, blockIndex: block.index });
+  };
+
+  // 2. Kéo chuột qua các ô kế tiếp trên cùng một hàng sân
+  const handleCellMouseEnter = (court, block) => {
+    if (!isMouseDown || !dragStartInfo) return;
+    if (dragStartInfo.courtId !== court.id) return; // Chỉ kéo trên cùng 1 sân
+
+    if (block.index !== dragStartInfo.blockIndex) {
+      setHasDragged(true);
+      const startIdx = Math.min(dragStartInfo.blockIndex, block.index);
+      const endIdx = Math.max(dragStartInfo.blockIndex, block.index);
+
+      // Kiểm tra nếu toàn bộ dải từ startIdx tới endIdx còn trống
+      if (isRangeFree(court, startIdx, endIdx)) {
+        setSelectedCourtId(court.id);
+        setStartSlot(HALF_HOUR_BLOCKS[startIdx].start);
+        setEndSlot(HALF_HOUR_BLOCKS[endIdx].end);
+      }
+    }
+  };
+
+  // 3. Thả chuột kết thúc kéo
+  const handleCellMouseUp = (court, block) => {
+    if (isMouseDown && hasDragged) {
+      const currentStartIdx = HALF_HOUR_BLOCKS.findIndex((b) => b.start === startSlot);
+      const currentEndIdx = HALF_HOUR_BLOCKS.findIndex((b) => b.end === endSlot);
+      // Nếu chỉ kéo 1 ô (30 phút) -> Tự động chọn 2 ô kế tiếp (1 tiếng) để đáp ứng quy định tối thiểu
+      if (currentStartIdx !== -1 && currentEndIdx !== -1 && currentEndIdx - currentStartIdx === 0) {
+        const nextBlock = HALF_HOUR_BLOCKS[currentStartIdx + 1];
+        if (nextBlock && isRangeFree(court, currentStartIdx, currentStartIdx + 1)) {
+          setEndSlot(nextBlock.end);
+        }
+      }
+    }
+    setIsMouseDown(false);
+    setDragStartInfo(null);
+  };
+
+  // 4. Xử lý khi khách bấm click truyền thống (Vẫn giữ nguyên 100% cách bấm cũ)
   const handleCellClick = (court, block) => {
+    if (hasDragged) {
+      setHasDragged(false);
+      return;
+    }
+
     const cellState = getCellBookingState(court, block);
     if (['BOOKED', 'EVENT', 'MAINTENANCE'].includes(cellState.status)) {
       return;
@@ -215,10 +283,22 @@ export default function TenantBookingPage() {
       const bookingId = res.data.booking.id;
       const qrRes = await axiosClient.get(`/payments/${bookingId}/info`);
       setPaymentData(qrRes.data.paymentData);
-      fetchTimeline();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Lỗi khi đặt lịch.');
     }
+  };
+
+  // Đóng hoặc Hủy thanh toán VietQR -> Hủy đơn PENDING trên server và giải phóng ô sân ngay lập tức!
+  const handleClosePaymentModal = async () => {
+    if (paymentData?.bookingId) {
+      try {
+        await axiosClient.delete(`/bookings/${paymentData.bookingId}/cancel-pending`);
+      } catch (err) {
+        console.error('Lỗi khi hủy đơn PENDING:', err);
+      }
+    }
+    setPaymentData(null);
+    fetchTimeline(); // Lấy lại lịch mới nhất từ server -> Sân sẽ về màu trắng (AVAILABLE) ngay!
   };
 
   const handleMockConfirmPayment = async () => {
@@ -393,10 +473,13 @@ export default function TenantBookingPage() {
                       return (
                         <td
                           key={block.index}
+                          onMouseDown={(e) => handleCellMouseDown(court, block, e)}
+                          onMouseEnter={() => handleCellMouseEnter(court, block)}
+                          onMouseUp={() => handleCellMouseUp(court, block)}
                           onClick={() => handleCellClick(court, block)}
-                          title={`${court.name} (${block.start} - ${block.end})`}
+                          title={`${court.name} (${block.start} - ${block.end}) - Bấm hoặc kéo chuột để chọn`}
                           style={{ width: `${cellWidth}px`, minWidth: `${cellWidth}px` }}
-                          className={`h-12 border-b border-r border-slate-300 text-center align-middle transition-colors ${cellClass}`}
+                          className={`h-12 border-b border-r border-slate-300 text-center align-middle transition-colors select-none ${cellClass}`}
                         >
                           {cellContent}
                         </td>
@@ -559,7 +642,16 @@ export default function TenantBookingPage() {
       {/* MODAL MÔ PHỎNG THANH TOÁN VIETQR 100% */}
       {paymentData && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl relative">
+            <button
+              type="button"
+              onClick={handleClosePaymentModal}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm transition"
+              title="Hủy đặt sân & Đóng"
+            >
+              ✕
+            </button>
+
             <h3 className="text-lg font-extrabold text-slate-900">
               Thanh toán 100% Tiền Sân qua VietQR
             </h3>
@@ -598,15 +690,15 @@ export default function TenantBookingPage() {
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setPaymentData(null)}
-                className="flex-1 py-3 border rounded-xl text-xs font-bold text-slate-600"
+                onClick={handleClosePaymentModal}
+                className="flex-1 py-3 border border-slate-300 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 transition"
               >
-                Đóng
+                ✕ Hủy & Đóng
               </button>
               <button
                 type="button"
                 onClick={handleMockConfirmPayment}
-                className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl text-xs shadow-md"
+                className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl text-xs shadow-md active:scale-95 transition"
               >
                 ✓ Mô phỏng: Đã chuyển khoản 100%
               </button>

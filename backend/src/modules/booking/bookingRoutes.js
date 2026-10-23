@@ -13,6 +13,9 @@ router.post('/preview-price', optionalAuth, bookingController.previewBookingPric
 // Khách đặt sân trực quan
 router.post('/visual', verifyToken, authorizeRoles('USER'), bookingController.createVisualBooking);
 
+// Khách hủy đơn giữ chỗ chờ thanh toán (khi bấm Đóng / Hủy trên modal VietQR)
+router.delete('/:id/cancel-pending', verifyToken, authorizeRoles('USER'), bookingController.cancelPendingBooking);
+
 // Khách xem lịch sử đặt sân của mình
 router.get('/my-bookings', verifyToken, authorizeRoles('USER'), bookingController.getMyBookings);
 

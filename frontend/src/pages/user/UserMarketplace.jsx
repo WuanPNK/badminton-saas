@@ -91,6 +91,22 @@ export default function UserMarketplace() {
     }
   }, [activeTab, accountSection]);
 
+  // Khi người dùng đăng xuất (user === null): Đưa về tab Khám phá sân và xóa sạch dữ liệu lịch cũ
+  useEffect(() => {
+    if (!user) {
+      setActiveTab('MARKETPLACE');
+      setMyBookings([]);
+    }
+  }, [user]);
+
+  const handleLogout = () => {
+    logout();
+    setActiveTab('MARKETPLACE');
+    setMyBookings([]);
+    navigate('/');
+    toast.success('Đã đăng xuất.');
+  };
+
   const handleOpenVenueDetail = async (tenantId, defaultTab = 'PRICING') => {
     setLoadingVenue(true);
     setVenueDetailTab(defaultTab);
@@ -356,10 +372,7 @@ export default function UserMarketplace() {
                 )}
 
                 <button
-                  onClick={() => {
-                    logout();
-                    toast.success('Đã đăng xuất.');
-                  }}
+                  onClick={handleLogout}
                   className="px-3 py-2 rounded-xl text-xs font-bold text-white/80 hover:text-white hover:bg-white/10 transition"
                 >
                   Đăng xuất
@@ -582,10 +595,7 @@ export default function UserMarketplace() {
             setCancelModalBooking={setCancelModalBooking}
             setReviewModalBooking={setReviewModalBooking}
             setActiveTab={setActiveTab}
-            onLogout={() => {
-              logout();
-              navigate('/');
-            }}
+            onLogout={handleLogout}
           />
         )}
       </div>

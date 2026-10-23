@@ -20,14 +20,14 @@ exports.getDailyTimeline = async (req, res) => {
       [tenantId]
     );
 
-    // Lấy tất cả các ca đặt đang giữ chỗ hoặc đã xác nhận trong ngày đó
+    // Lấy tất cả các ca đặt đang giữ chỗ (dưới 15 phút) hoặc đã xác nhận trong ngày đó
     const bookingsRes = await db.query(
       `SELECT id, booking_code, court_id, booking_type, start_time, end_time, status,
               walk_in_guest_name, user_id
        FROM bookings
        WHERE tenant_id = $1
          AND booking_date = $2
-         AND status IN ('PENDING', 'CONFIRMED', 'COMPLETED')
+         AND (status IN ('CONFIRMED', 'COMPLETED') OR (status = 'PENDING' AND created_at >= NOW() - INTERVAL '15 minutes'))
        ORDER BY start_time ASC`,
       [tenantId, date]
     );
@@ -364,5 +364,32 @@ exports.updateBookingOperationStatus = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Lỗi khi cập nhật trạng thái vận hành sân.' });
+  }
+};
+
+// 7. KHÁCH HỦY ĐƠN CHỜ THANH TOÁN (KHI ĐÓNG POPUP VIETQR) -> GIẢI PHÓNG SÂN NGAY
+exports.cancelPendingBooking = async (req, res) => {
+  const { id } = req.params;
+  const userId = req.user.id;
+
+  try {
+    const result = await db.query(
+      `DELETE FROM bookings
+       WHERE id = $1 AND user_id = $2 AND status = 'PENDING'
+       RETURNING *`,
+      [id, userId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy đơn PENDING hợp lệ để hủy.' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Đã hủy đơn giữ chỗ chưa thanh toán thành công.'
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi hủy đơn giữ chỗ.' });
   }
 };
