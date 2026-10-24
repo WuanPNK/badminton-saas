@@ -313,9 +313,8 @@ export default function SuperAdminDashboard() {
     }
   };
 
-  // Danh mục tab điều hướng phía trên
+  // Danh mục tab điều hướng phía trên (Đã loại bỏ tab Hub trùng lặp, dùng nút Back ở Header)
   const TAB_ITEMS = [
-    { id: 'HUB', label: '🏠 Bảng Điều Khiển' },
     {
       id: 'TENANTS',
       label: `🏟️ Duyệt Chủ Sân (${approvals.pendingTenants.length})`,

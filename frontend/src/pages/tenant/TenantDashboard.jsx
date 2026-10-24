@@ -601,9 +601,8 @@ export default function TenantDashboard() {
     );
   }
 
-  // Danh sách các Menu Tabs
+  // Danh sách các Menu Tabs (Đã loại bỏ tab Hub trùng lặp, dùng nút Back ở Header)
   const TAB_ITEMS = [
-    { id: 'HUB', label: '🏠 Bảng điều khiển (Hub)', show: true },
     { id: 'COURTS', label: '🏸 Quản lý Sân & Bảo trì', show: true },
     { id: 'PRICING_RULES', label: '💰 Bảng Giá Động', show: true },
     { id: 'POS_INVENTORY', label: '📦 Kho hàng POS', show: tenant.enable_pos_module },

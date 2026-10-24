@@ -169,14 +169,14 @@ export default function StaffDashboard() {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-16">
       {/* HEADER QUẦY LỄ TÂN */}
-      <header className="bg-slate-900 text-white px-6 py-4 shadow-md">
+      <header className="bg-gradient-to-r from-emerald-950 via-emerald-900 to-slate-900 text-white px-6 py-4 shadow-md sticky top-0 z-40 border-b border-emerald-900/60">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
           <div className="flex items-center gap-3">
             <span className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse"></span>
             <div>
               <h1 className="text-lg font-extrabold tracking-tight">Quầy Lễ Tân & POS — {tenant.name}</h1>
-              <p className="text-xs text-slate-400">
-                Nhân viên ca trực: <strong className="text-slate-200">{user?.fullName}</strong> ({user?.role})
+              <p className="text-xs text-emerald-200/80">
+                Nhân viên ca trực: <strong className="text-white">{user?.fullName}</strong> ({user?.role})
               </p>
             </div>
           </div>
@@ -184,14 +184,14 @@ export default function StaffDashboard() {
             {user?.role === 'TENANT_ADMIN' && (
               <button
                 onClick={() => navigate('/tenant')}
-                className="bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 rounded-xl text-xs font-bold transition"
+                className="bg-emerald-600 hover:bg-emerald-500 px-3.5 py-2 rounded-xl text-xs font-bold transition shadow-sm active:scale-95"
               >
                 ← Về Quản trị Chủ sân
               </button>
             )}
             <button
               onClick={() => { logout(); navigate('/'); }}
-              className="bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-400/30 px-3.5 py-2 rounded-xl text-xs font-bold transition"
+              className="bg-white/10 hover:bg-white/20 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition"
             >
               Đăng xuất
             </button>

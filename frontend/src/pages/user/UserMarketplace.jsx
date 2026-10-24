@@ -423,64 +423,9 @@ export default function UserMarketplace() {
         </div>
       </header>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-8 py-6">
         {activeTab === 'MARKETPLACE' && (
-          <div className="space-y-8">
-            {/* HERO BANNER THỂ THAO CAO CẤP */}
-            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 text-white p-6 sm:p-10 shadow-2xl border border-emerald-500/25">
-              {/* Quầng sáng ambient */}
-              <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
-
-              <div className="relative z-10 max-w-3xl">
-                <div className="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-extrabold uppercase px-3.5 py-1 rounded-full mb-4 shadow-inner">
-                  <span>🏸</span>
-                  <span>Hệ thống Đặt Sân Cầu Lông Đa Cụm Sân</span>
-                </div>
-                <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight mb-3">
-                  Tìm & Đặt Lịch Sân Cầu Lông <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Nhanh Chóng & Chuẩn Xác</span>
-                </h2>
-                <p className="text-xs sm:text-sm text-slate-300 mb-6 leading-relaxed max-w-2xl">
-                  Khám phá các cụm sân thảm BWF tiêu chuẩn, xem lịch trống trực quan theo từng ô 30 phút, thanh toán VietQR tức thì và nhận ưu đãi Sinh viên giảm tới 20%.
-                </p>
-
-                {/* 4 TRUST BADGES CAM KẾT */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-2.5">
-                    <span className="text-xl">⚡</span>
-                    <div>
-                      <div className="font-extrabold text-xs text-white">Giữ chỗ 30s</div>
-                      <div className="text-[10px] text-slate-300">Không lo trùng lịch</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-2.5">
-                    <span className="text-xl">🎓</span>
-                    <div>
-                      <div className="font-extrabold text-xs text-emerald-300">Giảm tới 20%</div>
-                      <div className="text-[10px] text-slate-300">Dành cho HSSV</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-2.5">
-                    <span className="text-xl">🛡️</span>
-                    <div>
-                      <div className="font-extrabold text-xs text-white">Hoàn 100% tiền</div>
-                      <div className="text-[10px] text-slate-300">Hủy trước 24h</div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-2.5">
-                    <span className="text-xl">📲</span>
-                    <div>
-                      <div className="font-extrabold text-xs text-white">VietQR Tự động</div>
-                      <div className="text-[10px] text-slate-300">Quét mã tiện lợi</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
+          <div className="space-y-6">
             {/* THANH TÌM KIẾM & BỘ LỌC KHU VỰC QUẬN */}
             <div className="bg-white p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-200/90 space-y-3.5">
               <div className="flex flex-wrap gap-3 items-center">

@@ -3,14 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 
-const DEMO_ACCOUNTS = [
-  { label: '👑 Super Admin', email: 'superadmin@saas.com', desc: 'Quản trị SaaS nền tảng' },
-  { label: '🏟️ Chủ sân Đông Đô', email: 'chusan1@gmail.com', desc: 'Chủ sân (Full tính năng, giảm 20% SV)' },
-  { label: '🧑‍💼 Lễ tân Đông Đô', email: 'letan1@gmail.com', desc: 'Lễ tân check-in, POS, hoàn tiền' },
-  { label: '🎓 SV Minh Đức', email: 'sinhvien@gmail.com', desc: 'Thẻ HSSV đã duyệt (-20%)' },
-  { label: '🏸 Khách hàng thường', email: 'khach@gmail.com', desc: 'Khách đặt sân online VietQR' },
-];
-
 export default function AuthPage() {
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState(() => {
@@ -239,19 +231,6 @@ export default function AuthPage() {
     }
   };
 
-  const fillDemoAccount = (acc) => {
-    setMode('LOGIN');
-    setForm((prev) => ({
-      ...prev,
-      email: acc.email,
-      password: '123456',
-    }));
-    setMessage({
-      type: 'success',
-      text: `Đã điền tài khoản: ${acc.label} (${acc.email}). Mật khẩu: 123456. Hãy bấm Đăng nhập!`,
-    });
-  };
-
   const isRegisterMode = mode === 'REGISTER_USER' || mode === 'REGISTER_TENANT';
   const passwordMismatch =
     form.confirmPassword.length > 0 && form.password !== form.confirmPassword;
@@ -453,37 +432,6 @@ export default function AuthPage() {
             >
               {loading ? 'Đang xác thực...' : 'Đăng nhập vào hệ thống →'}
             </button>
-
-            {/* KHỐI CHỌN NHANH TÀI KHOẢN MẪU DEMO (CLICK 1 CHẠM TỰ ĐIỀN) */}
-            <div className="pt-5 border-t border-slate-100">
-              <div className="flex items-center justify-between mb-2.5">
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
-                  <span className="text-amber-500">⚡</span>
-                  <span>Tài khoản mẫu thử nghiệm (Mật khẩu: 123456)</span>
-                </span>
-                <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
-                  Click 1 chạm
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {DEMO_ACCOUNTS.map((acc) => (
-                  <button
-                    key={acc.email}
-                    type="button"
-                    onClick={() => fillDemoAccount(acc)}
-                    className="text-left px-3 py-2 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200/80 rounded-xl transition group flex items-center justify-between cursor-pointer"
-                  >
-                    <div className="min-w-0 pr-1">
-                      <div className="text-xs font-bold text-slate-800 group-hover:text-emerald-800 truncate">
-                        {acc.label}
-                      </div>
-                      <div className="text-[10px] text-slate-500 truncate">{acc.desc}</div>
-                    </div>
-                    <span className="text-slate-400 group-hover:text-emerald-600 text-xs font-bold shrink-0">↳</span>
-                  </button>
-                ))}
-              </div>
-            </div>
           </form>
         )}
 
