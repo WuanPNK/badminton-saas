@@ -22,7 +22,7 @@ export default function SuperAdminDashboard() {
     try {
       const res = await axiosClient.get('/super-admin/revenue-export');
       if (res.data?.success && res.data?.exportData) {
-        exportSuperAdminRevenueToExcel(res.data.exportData);
+        await exportSuperAdminRevenueToExcel(res.data.exportData);
         toast.success('Đã xuất file Excel SaaS (.xlsx) thành công!', { id: toastId });
       } else {
         toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });

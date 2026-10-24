@@ -1,5 +1,3 @@
-import * as XLSX from 'xlsx';
-
 /**
  * Hàm định dạng tiền tệ VNĐ cho chuỗi hiển thị
  */
@@ -55,9 +53,10 @@ const autoFitColumns = (dataRows) => {
 // 1. XUẤT EXCEL DÀNH CHO CHỦ SÂN (TENANT REVENUE & BOOKINGS)
 // ============================================================================
 
-export const exportTenantRevenueToExcel = (exportData) => {
+export const exportTenantRevenueToExcel = async (exportData) => {
   if (!exportData) return;
 
+  const XLSX = await import('xlsx');
   const { tenant = {}, summary = {}, bookings = [], posOrders = [], courtPerformance = [] } = exportData;
   const workbook = XLSX.utils.book_new();
   const currentDateStr = new Date().toISOString().split('T')[0];
@@ -285,9 +284,10 @@ export const exportTenantRevenueToCSV = (exportData) => {
 // 3. XUẤT EXCEL DÀNH CHO SUPER ADMIN (SAAS PLATFORM REVENUE & CONTRACTS)
 // ============================================================================
 
-export const exportSuperAdminRevenueToExcel = (exportData) => {
+export const exportSuperAdminRevenueToExcel = async (exportData) => {
   if (!exportData) return;
 
+  const XLSX = await import('xlsx');
   const {
     summary = {},
     subscriptions = [],

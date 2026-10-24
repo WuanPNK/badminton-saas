@@ -13,7 +13,7 @@ export default function RevenueCharts({ analytics }) {
     try {
       const res = await axiosClient.get('/tenant/revenue-export');
       if (res.data?.success && res.data?.exportData) {
-        exportTenantRevenueToExcel(res.data.exportData);
+        await exportTenantRevenueToExcel(res.data.exportData);
         toast.success('Đã xuất file Excel (.xlsx) thành công!', { id: toastId });
       } else {
         toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });

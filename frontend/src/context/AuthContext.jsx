@@ -4,10 +4,16 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
-    const savedUser = localStorage.getItem('user');
-    const token = localStorage.getItem('token');
-    if (savedUser && token) {
-      return JSON.parse(savedUser);
+    try {
+      const savedUser = localStorage.getItem('user');
+      const token = localStorage.getItem('token');
+      if (savedUser && token && savedUser !== 'undefined') {
+        return JSON.parse(savedUser);
+      }
+    } catch (e) {
+      console.error('Lỗi phân giải dữ liệu người dùng từ localStorage:', e);
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
     }
     return null;
   });
