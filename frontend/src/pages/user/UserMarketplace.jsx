@@ -18,6 +18,8 @@ const COURT_GALLERY = [
   'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=900&q=80',
 ];
 
+const POPULAR_DISTRICTS = ['Tất cả', 'Cầu Giấy', 'Đống Đa', 'Thanh Xuân', 'Nam Từ Liêm', 'Hai Bà Trưng', 'Hoàng Mai'];
+
 export default function UserMarketplace() {
   const { user, updateUser, logout } = useAuth();
   const navigate = useNavigate();
@@ -299,39 +301,45 @@ export default function UserMarketplace() {
   });
 
   return (
-    <div className="min-h-screen bg-[#F4F7F6] pb-20">
-      <header className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-900 text-white px-4 sm:px-8 py-4 shadow-md sticky top-0 z-30">
+    <div className="min-h-screen bg-slate-100/70 pb-20">
+      {/* NAVBAR PHONG CÁCH GLASSMORPHISM CAO CẤP */}
+      <header className="bg-slate-950/90 backdrop-blur-xl text-white px-4 sm:px-8 py-3.5 shadow-xl border-b border-emerald-500/20 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
           <div
             onClick={() => setActiveTab('MARKETPLACE')}
-            className="flex items-center gap-3 cursor-pointer"
+            className="flex items-center gap-3 cursor-pointer group"
           >
-            <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center text-xl shadow-inner">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xl shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
               🏸
             </div>
             <div>
-              <h1 className="text-lg sm:text-xl font-extrabold tracking-tight">
-                Badminton SaaS Marketplace
-              </h1>
-              <p className="text-xs text-emerald-200">
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg sm:text-xl font-black tracking-tight bg-gradient-to-r from-white via-slate-100 to-emerald-300 bg-clip-text text-transparent">
+                  Badminton SaaS
+                </h1>
+                <span className="hidden sm:inline-block bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
+                  BWF Portal
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
                 {user ? (
-                  <>Xin chào, <strong className="text-white">{user.fullName}</strong></>
+                  <>Xin chào, <strong className="text-emerald-300">{user.fullName}</strong></>
                 ) : (
-                  'Hệ thống đặt sân & khám phá cụm sân toàn quốc'
+                  'Sàn đặt lịch sân cầu lông trực tuyến & đa cụm sân'
                 )}
               </p>
             </div>
           </div>
 
-          {/* KHU VỰC GÓC PHẢI TRÊN CÙNG: ĐĂNG NHẬP / ĐĂNG KÝ HOẶC MENU NGƯỜI DÙNG */}
+          {/* KHU VỰC ĐIỀU HƯỚNG BÊN PHẢI */}
           <div className="flex items-center gap-2 sm:gap-3">
             {user ? (
               <>
                 <button
                   onClick={() => setActiveTab('MARKETPLACE')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'MARKETPLACE'
-                      ? 'bg-white text-emerald-900 shadow-sm'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 font-black'
                       : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
@@ -341,9 +349,9 @@ export default function UserMarketplace() {
 
                 <button
                   onClick={() => setActiveTab('MY_BOOKINGS')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'MY_BOOKINGS'
-                      ? 'bg-white text-emerald-900 shadow-sm'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 font-black'
                       : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
@@ -353,9 +361,9 @@ export default function UserMarketplace() {
 
                 <button
                   onClick={() => setActiveTab('ACCOUNT')}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 ${
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                     activeTab === 'ACCOUNT'
-                      ? 'bg-white text-emerald-900 shadow-sm'
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20 font-black'
                       : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
@@ -366,7 +374,7 @@ export default function UserMarketplace() {
                 {user.role === 'SUPER_ADMIN' && (
                   <button
                     onClick={() => navigate('/super-admin')}
-                    className="px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 transition shadow-sm"
+                    className="px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 transition shadow-sm cursor-pointer"
                   >
                     👑 Admin
                   </button>
@@ -374,7 +382,7 @@ export default function UserMarketplace() {
                 {user.role === 'TENANT_ADMIN' && (
                   <button
                     onClick={() => navigate('/tenant')}
-                    className="px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 transition shadow-sm"
+                    className="px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 transition shadow-sm cursor-pointer"
                   >
                     🏟️ Quản lý
                   </button>
@@ -382,7 +390,7 @@ export default function UserMarketplace() {
                 {user.role === 'STAFF' && (
                   <button
                     onClick={() => navigate('/staff')}
-                    className="px-3 py-2 rounded-xl text-xs font-extrabold bg-amber-400 hover:bg-amber-300 text-slate-950 transition shadow-sm"
+                    className="px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 transition shadow-sm cursor-pointer"
                   >
                     🧑‍💼 Lễ tân
                   </button>
@@ -390,7 +398,7 @@ export default function UserMarketplace() {
 
                 <button
                   onClick={handleLogout}
-                  className="px-3 py-2 rounded-xl text-xs font-bold text-white/80 hover:text-white hover:bg-white/10 transition"
+                  className="px-3 py-2 rounded-xl text-xs font-bold text-slate-300 hover:text-white hover:bg-white/10 transition cursor-pointer"
                 >
                   Đăng xuất
                 </button>
@@ -399,13 +407,13 @@ export default function UserMarketplace() {
               <>
                 <button
                   onClick={() => navigate('/login')}
-                  className="px-4 py-2 rounded-xl text-xs font-bold text-white hover:text-emerald-200 border border-white/25 hover:border-white/50 transition shadow-sm"
+                  className="px-4 py-2 rounded-xl text-xs font-bold text-white hover:text-emerald-300 border border-white/25 hover:border-emerald-400/50 transition cursor-pointer"
                 >
                   Đăng nhập
                 </button>
                 <button
                   onClick={() => navigate('/login?mode=register')}
-                  className="px-4 py-2 rounded-xl text-xs font-extrabold bg-emerald-400 hover:bg-emerald-300 text-slate-950 transition shadow-sm active:scale-95"
+                  className="px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-emerald-400 to-teal-400 hover:from-emerald-300 hover:to-teal-300 text-slate-950 transition shadow-md shadow-emerald-500/25 active:scale-95 cursor-pointer"
                 >
                   Đăng ký
                 </button>
@@ -417,41 +425,137 @@ export default function UserMarketplace() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8">
         {activeTab === 'MARKETPLACE' && (
-          <div className="space-y-6">
-            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex flex-wrap gap-3 items-center">
-              <div className="flex-1 min-w-[240px]">
-                <input
-                  type="text"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && fetchMarketplace()}
-                  placeholder="Tìm theo tên cụm sân hoặc địa chỉ đường..."
-                  className="w-full pl-4 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+          <div className="space-y-8">
+            {/* HERO BANNER THỂ THAO CAO CẤP */}
+            <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 text-white p-6 sm:p-10 shadow-2xl border border-emerald-500/25">
+              {/* Quầng sáng ambient */}
+              <div className="absolute top-0 right-0 w-96 h-96 bg-emerald-500/20 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 left-1/3 w-80 h-80 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
+
+              <div className="relative z-10 max-w-3xl">
+                <div className="inline-flex items-center gap-2 bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-xs font-extrabold uppercase px-3.5 py-1 rounded-full mb-4 shadow-inner">
+                  <span>🏸</span>
+                  <span>Hệ thống Đặt Sân Cầu Lông Đa Cụm Sân</span>
+                </div>
+                <h2 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight mb-3">
+                  Tìm & Đặt Lịch Sân Cầu Lông <span className="bg-gradient-to-r from-emerald-400 to-teal-300 bg-clip-text text-transparent">Nhanh Chóng & Chuẩn Xác</span>
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 mb-6 leading-relaxed max-w-2xl">
+                  Khám phá các cụm sân thảm BWF tiêu chuẩn, xem lịch trống trực quan theo từng ô 30 phút, thanh toán VietQR tức thì và nhận ưu đãi Sinh viên giảm tới 20%.
+                </p>
+
+                {/* 4 TRUST BADGES CAM KẾT */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-2.5">
+                    <span className="text-xl">⚡</span>
+                    <div>
+                      <div className="font-extrabold text-xs text-white">Giữ chỗ 30s</div>
+                      <div className="text-[10px] text-slate-300">Không lo trùng lịch</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-2.5">
+                    <span className="text-xl">🎓</span>
+                    <div>
+                      <div className="font-extrabold text-xs text-emerald-300">Giảm tới 20%</div>
+                      <div className="text-[10px] text-slate-300">Dành cho HSSV</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-2.5">
+                    <span className="text-xl">🛡️</span>
+                    <div>
+                      <div className="font-extrabold text-xs text-white">Hoàn 100% tiền</div>
+                      <div className="text-[10px] text-slate-300">Hủy trước 24h</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl p-3 flex items-center gap-2.5">
+                    <span className="text-xl">📲</span>
+                    <div>
+                      <div className="font-extrabold text-xs text-white">VietQR Tự động</div>
+                      <div className="text-[10px] text-slate-300">Quét mã tiện lợi</div>
+                    </div>
+                  </div>
+                </div>
               </div>
-
-              <select
-                value={district}
-                onChange={(e) => setDistrict(e.target.value)}
-                className="px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">📍 Tất cả Quận / Khu vực</option>
-                <option value="Cầu Giấy">Quận Cầu Giấy</option>
-                <option value="Đống Đa">Quận Đống Đa</option>
-                <option value="Thanh Xuân">Quận Thanh Xuân</option>
-                <option value="Hai Bà Trưng">Quận Hai Bà Trưng</option>
-                <option value="Hoàng Mai">Quận Hoàng Mai</option>
-                <option value="Nam Từ Liêm">Quận Nam Từ Liêm</option>
-              </select>
-
-              <button
-                onClick={fetchMarketplace}
-                className="bg-emerald-700 hover:bg-emerald-800 text-white px-6 py-2.5 rounded-xl text-sm font-bold transition shadow-sm"
-              >
-                Tìm kiếm
-              </button>
             </div>
 
+            {/* THANH TÌM KIẾM & BỘ LỌC KHU VỰC QUẬN */}
+            <div className="bg-white p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-200/90 space-y-3.5">
+              <div className="flex flex-wrap gap-3 items-center">
+                <div className="flex-1 min-w-[260px] relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                  <input
+                    type="text"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && fetchMarketplace()}
+                    placeholder="Tìm theo tên cụm sân (Đông Đô, Thái Hà...) hoặc địa chỉ..."
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-2xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                  />
+                </div>
+
+                <select
+                  value={district}
+                  onChange={(e) => setDistrict(e.target.value)}
+                  className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                >
+                  <option value="">📍 Tất cả Quận / Khu vực</option>
+                  <option value="Cầu Giấy">Quận Cầu Giấy</option>
+                  <option value="Đống Đa">Quận Đống Đa</option>
+                  <option value="Thanh Xuân">Quận Thanh Xuân</option>
+                  <option value="Hai Bà Trưng">Quận Hai Bà Trưng</option>
+                  <option value="Hoàng Mai">Quận Hoàng Mai</option>
+                  <option value="Nam Từ Liêm">Quận Nam Từ Liêm</option>
+                </select>
+
+                <button
+                  onClick={fetchMarketplace}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-2xl text-sm font-extrabold transition shadow-md shadow-emerald-600/25 active:scale-95 cursor-pointer"
+                >
+                  Tìm kiếm
+                </button>
+              </div>
+
+              {/* QUICK DISTRICT PILLS (BẤM 1 CHẠM LỌC QUẬN) */}
+              <div className="flex items-center gap-2 pt-2 border-t border-slate-100 overflow-x-auto pb-1">
+                <span className="text-xs font-extrabold text-slate-400 whitespace-nowrap uppercase tracking-wider text-[11px]">
+                  Khu vực nhanh:
+                </span>
+                <div className="flex items-center gap-1.5 flex-nowrap">
+                  {POPULAR_DISTRICTS.map((d) => {
+                    const isSelected = (d === 'Tất cả' && !district) || district === d;
+                    return (
+                      <button
+                        key={d}
+                        type="button"
+                        onClick={() => setDistrict(d === 'Tất cả' ? '' : d)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                        }`}
+                      >
+                        {d === 'Tất cả' ? '🌐 Tất cả' : `📍 ${d}`}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            {/* TIÊU ĐỀ BỘ ĐẾM SÂN */}
+            <div className="flex justify-between items-center px-1">
+              <h3 className="text-sm font-extrabold text-slate-700 uppercase tracking-wider">
+                {district ? `Cụm sân tại Quận ${district}` : 'Tất cả cụm sân đang mở cửa'} ({tenants.length})
+              </h3>
+              <span className="text-xs text-slate-400">
+                Cập nhật theo thời gian thực
+              </span>
+            </div>
+
+            {/* DANH SÁCH THẺ SÂN */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {tenants.map((t, index) => {
                 const coverImg = COURT_GALLERY[index % COURT_GALLERY.length];
@@ -468,10 +572,24 @@ export default function UserMarketplace() {
               })}
 
               {tenants.length === 0 && (
-                <div className="col-span-3 bg-white rounded-2xl p-12 text-center border border-slate-200">
-                  <p className="text-sm text-slate-500">
-                    Không tìm thấy cụm sân nào phù hợp với bộ lọc hiện tại.
+                <div className="col-span-3 bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm space-y-3">
+                  <div className="text-4xl">🏸</div>
+                  <h4 className="text-base font-extrabold text-slate-800">
+                    Không tìm thấy cụm sân nào phù hợp
+                  </h4>
+                  <p className="text-xs text-slate-500 max-w-md mx-auto">
+                    Hiện chưa có cụm sân nào khớp với từ khóa "{search}" hoặc khu vực bạn chọn. Vui lòng thử đổi từ khóa hoặc chọn quận khác.
                   </p>
+                  <button
+                    onClick={() => {
+                      setDistrict('');
+                      setSearch('');
+                      fetchMarketplace();
+                    }}
+                    className="inline-block mt-2 bg-emerald-50 text-emerald-800 border border-emerald-200 px-4 py-2 rounded-xl text-xs font-bold hover:bg-emerald-100 transition cursor-pointer"
+                  >
+                    Xem tất cả cụm sân
+                  </button>
                 </div>
               )}
             </div>

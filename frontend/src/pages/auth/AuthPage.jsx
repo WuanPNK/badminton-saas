@@ -3,6 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 
+const DEMO_ACCOUNTS = [
+  { label: '👑 Super Admin', email: 'superadmin@saas.com', desc: 'Quản trị SaaS nền tảng' },
+  { label: '🏟️ Chủ sân Đông Đô', email: 'chusan1@gmail.com', desc: 'Chủ sân (Full tính năng, giảm 20% SV)' },
+  { label: '🧑‍💼 Lễ tân Đông Đô', email: 'letan1@gmail.com', desc: 'Lễ tân check-in, POS, hoàn tiền' },
+  { label: '🎓 SV Minh Đức', email: 'sinhvien@gmail.com', desc: 'Thẻ HSSV đã duyệt (-20%)' },
+  { label: '🏸 Khách hàng thường', email: 'khach@gmail.com', desc: 'Khách đặt sân online VietQR' },
+];
+
 export default function AuthPage() {
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState(() => {
@@ -15,6 +23,16 @@ export default function AuthPage() {
 
   const { user, login } = useAuth();
   const navigate = useNavigate();
+
+  // Bắt tham số URL nếu phiên đăng nhập hết hạn (từ axios interceptor)
+  useEffect(() => {
+    if (searchParams.get('expired') === '1') {
+      setMessage({
+        type: 'error',
+        text: 'Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại để tiếp tục.',
+      });
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (user) {
@@ -221,24 +239,47 @@ export default function AuthPage() {
     }
   };
 
+  const fillDemoAccount = (acc) => {
+    setMode('LOGIN');
+    setForm((prev) => ({
+      ...prev,
+      email: acc.email,
+      password: '123456',
+    }));
+    setMessage({
+      type: 'success',
+      text: `Đã điền tài khoản: ${acc.label} (${acc.email}). Mật khẩu: 123456. Hãy bấm Đăng nhập!`,
+    });
+  };
+
   const isRegisterMode = mode === 'REGISTER_USER' || mode === 'REGISTER_TENANT';
   const passwordMismatch =
     form.confirmPassword.length > 0 && form.password !== form.confirmPassword;
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4 sm:p-6">
-      {/* CARD ĐƠN GIẢN TRUNG TÂM (ĐÃ XOÁ BANNER BÊN TRÁI) */}
-      <div className="bg-white w-full max-w-lg rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.07)] border border-slate-100 p-6 sm:p-10">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950 to-slate-900 flex flex-col items-center justify-center p-4 sm:p-8 relative overflow-hidden">
+      {/* Hiệu ứng quầng sáng ambient background */}
+      <div className="absolute top-1/4 -left-24 w-96 h-96 bg-emerald-500/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-1/4 -right-24 w-96 h-96 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
+
+      {/* CARD TRUNG TÂM PHONG CÁCH GLASSMORPHISM CAO CẤP */}
+      <div className="bg-white/95 backdrop-blur-2xl w-full max-w-xl rounded-3xl shadow-[0_25px_70px_-15px_rgba(0,0,0,0.4)] border border-white/50 p-6 sm:p-10 relative z-10">
         
-        {/* NÚT QUAY LẠI TRANG CHỦ */}
-        <button
-          type="button"
-          onClick={() => navigate('/')}
-          className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-emerald-700 transition mb-4 group"
-        >
-          <span className="group-hover:-translate-x-0.5 transition-transform">←</span>
-          <span>Quay lại Khám phá Sân</span>
-        </button>
+        {/* NÚT QUAY LẠI TRANG CHỦ & BADGE THƯƠNG HIỆU */}
+        <div className="flex items-center justify-between mb-4">
+          <button
+            type="button"
+            onClick={() => navigate('/')}
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-emerald-700 transition group"
+          >
+            <span className="group-hover:-translate-x-0.5 transition-transform font-mono">←</span>
+            <span>Khám phá Sân</span>
+          </button>
+          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
+            <span>🏸</span>
+            <span>Badminton SaaS Portal</span>
+          </span>
+        </div>
 
         {/* TIÊU ĐỀ */}
         <div className="mb-6">
@@ -408,10 +449,41 @@ export default function AuthPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-[0_4px_14px_0_rgba(5,150,105,0.35)] active:scale-[0.99]"
+              className="w-full bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 disabled:bg-slate-300 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-[0_4px_16px_0_rgba(5,150,105,0.35)] active:scale-[0.99]"
             >
               {loading ? 'Đang xác thực...' : 'Đăng nhập vào hệ thống →'}
             </button>
+
+            {/* KHỐI CHỌN NHANH TÀI KHOẢN MẪU DEMO (CLICK 1 CHẠM TỰ ĐIỀN) */}
+            <div className="pt-5 border-t border-slate-100">
+              <div className="flex items-center justify-between mb-2.5">
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                  <span className="text-amber-500">⚡</span>
+                  <span>Tài khoản mẫu thử nghiệm (Mật khẩu: 123456)</span>
+                </span>
+                <span className="text-[10px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">
+                  Click 1 chạm
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {DEMO_ACCOUNTS.map((acc) => (
+                  <button
+                    key={acc.email}
+                    type="button"
+                    onClick={() => fillDemoAccount(acc)}
+                    className="text-left px-3 py-2 bg-slate-50 hover:bg-emerald-50 hover:border-emerald-300 border border-slate-200/80 rounded-xl transition group flex items-center justify-between cursor-pointer"
+                  >
+                    <div className="min-w-0 pr-1">
+                      <div className="text-xs font-bold text-slate-800 group-hover:text-emerald-800 truncate">
+                        {acc.label}
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate">{acc.desc}</div>
+                    </div>
+                    <span className="text-slate-400 group-hover:text-emerald-600 text-xs font-bold shrink-0">↳</span>
+                  </button>
+                ))}
+              </div>
+            </div>
           </form>
         )}
 

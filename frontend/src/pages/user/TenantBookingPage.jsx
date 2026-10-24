@@ -57,6 +57,41 @@ export default function TenantBookingPage() {
 
   // Modal Thanh toán VietQR 100%
   const [paymentData, setPaymentData] = useState(null);
+  const [countdown, setCountdown] = useState(900); // 15 phút = 900s
+  const [copiedField, setCopiedField] = useState(null);
+
+  // Đếm ngược 15 phút giữ chỗ
+  useEffect(() => {
+    if (!paymentData) {
+      setCountdown(900);
+      return;
+    }
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          toast.error('Hết 15 phút giữ chỗ! Đơn đặt sân đã tự động hủy.');
+          handleClosePaymentModal();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [paymentData]);
+
+  const copyToClipboard = (text, fieldName) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    toast.success(`Đã sao chép ${fieldName}!`);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  const formatCountdown = (secs) => {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0');
+    const s = (secs % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
 
   // Trạng thái kéo chuột trên lưới (Drag selection)
   const [isMouseDown, setIsMouseDown] = useState(false);
@@ -678,68 +713,119 @@ export default function TenantBookingPage() {
         </div>
       )}
 
-      {/* MODAL MÔ PHỎNG THANH TOÁN VIETQR 100% */}
+      {/* MODAL MÔ PHỎNG THANH TOÁN VIETQR 100% CÓ ĐỒNG HỒ ĐẾM NGƯỢC & NÚT COPY */}
       {paymentData && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 text-center space-y-4 shadow-2xl relative border border-slate-100 animate-in fade-in zoom-in-95 duration-200">
+            {/* NÚT ĐÓNG / HỦY GIỮ CHỖ */}
             <button
               type="button"
               onClick={handleClosePaymentModal}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm transition"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm transition cursor-pointer"
               title="Hủy đặt sân & Đóng"
             >
               ✕
             </button>
 
-            <h3 className="text-lg font-extrabold text-slate-900">
-              Thanh toán 100% Tiền Sân qua VietQR
-            </h3>
-            <p className="text-xs text-slate-500">
-              Mã đơn: <strong>{paymentData.bookingCode}</strong> | Sân:{' '}
-              <strong>{paymentData.courtName}</strong>
-            </p>
+            {/* HEADER MODAL VỚI ĐỒNG HỒ ĐẾM NGƯỢC */}
+            <div>
+              <div className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200/90 text-xs font-black px-3.5 py-1 rounded-full mb-2">
+                <span className="animate-pulse">⏳</span>
+                <span>Thời gian giữ chỗ: {formatCountdown(countdown)}</span>
+              </div>
+              <h3 className="text-lg font-black text-slate-900">
+                Thanh toán 100% Tiền Sân VietQR
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Mã đơn: <strong className="text-slate-900 font-mono">#{paymentData.bookingCode}</strong> | Sân: <strong className="text-slate-900">{paymentData.courtName}</strong>
+              </p>
+            </div>
 
-            <img
-              src={paymentData.vietQrUrl}
-              alt="VietQR Payment"
-              className="w-56 h-56 mx-auto border rounded-2xl p-2"
-            />
+            {/* HÌNH ẢNH MÃ VIETQR */}
+            <div className="relative inline-block mx-auto bg-slate-50 p-3 rounded-2xl border-2 border-emerald-500/30 shadow-inner">
+              <img
+                src={paymentData.vietQrUrl}
+                alt="VietQR Payment"
+                className="w-56 h-56 mx-auto rounded-xl object-contain"
+              />
+            </div>
 
-            <div className="bg-slate-50 p-3.5 rounded-2xl text-xs text-left space-y-1.5 border">
-              <div>
-                Ngân hàng Chủ sân: <strong>{paymentData.bankName}</strong>
+            {/* THÔNG TIN CHUYỂN KHOẢN VỚI NÚT SAO CHÉP 1 CHẠM */}
+            <div className="bg-slate-50 p-4 rounded-2xl text-xs text-left space-y-2 border border-slate-200/80">
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Ngân hàng thụ hưởng:</span>
+                <strong className="text-slate-900 font-bold">{paymentData.bankName}</strong>
               </div>
-              <div>
-                Số tài khoản: <strong>{paymentData.accountNumber}</strong>
+
+              {/* SỐ TÀI KHOẢN */}
+              <div className="flex justify-between items-center bg-white p-2 rounded-xl border border-slate-200/60">
+                <div>
+                  <div className="text-[10px] text-slate-400 font-semibold">Số tài khoản:</div>
+                  <div className="font-mono font-bold text-slate-900 text-sm">{paymentData.accountNumber}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(paymentData.accountNumber, 'Số tài khoản')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-lg text-[11px] font-bold border border-slate-200 transition cursor-pointer"
+                >
+                  {copiedField === 'Số tài khoản' ? '✓ Đã chép' : 'Sao chép'}
+                </button>
               </div>
-              <div>
-                Chủ tài khoản: <strong>{paymentData.accountName}</strong>
+
+              <div className="flex justify-between items-center text-slate-600">
+                <span>Chủ tài khoản:</span>
+                <strong className="text-slate-900 font-bold uppercase">{paymentData.accountName}</strong>
               </div>
-              <div>
-                Số tiền (100%):{' '}
-                <strong className="text-emerald-700">
-                  {Number(paymentData.finalPrice).toLocaleString()} ₫
-                </strong>
+
+              {/* SỐ TIỀN */}
+              <div className="flex justify-between items-center bg-white p-2 rounded-xl border border-slate-200/60">
+                <div>
+                  <div className="text-[10px] text-slate-400 font-semibold">Số tiền cần thanh toán:</div>
+                  <div className="font-black text-emerald-700 text-base">
+                    {Number(paymentData.finalPrice).toLocaleString()} ₫
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(String(paymentData.finalPrice), 'Số tiền')}
+                  className="px-2.5 py-1 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-lg text-[11px] font-bold border border-slate-200 transition cursor-pointer"
+                >
+                  {copiedField === 'Số tiền' ? '✓ Đã chép' : 'Sao chép'}
+                </button>
               </div>
-              <div>
-                Nội dung CK: <strong className="text-blue-700">{paymentData.transferContent}</strong>
+
+              {/* NỘI DUNG CHUYỂN KHOẢN */}
+              <div className="flex justify-between items-center bg-emerald-50/80 p-2 rounded-xl border border-emerald-200">
+                <div>
+                  <div className="text-[10px] text-emerald-700 font-semibold">Nội dung chuyển khoản chuẩn:</div>
+                  <div className="font-mono font-black text-emerald-900 text-xs">{paymentData.transferContent}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(paymentData.transferContent, 'Nội dung chuyển khoản')}
+                  className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-bold shadow-sm hover:bg-emerald-700 transition cursor-pointer"
+                >
+                  {copiedField === 'Nội dung chuyển khoản' ? '✓ Đã chép' : 'Sao chép'}
+                </button>
               </div>
             </div>
 
-            <div className="flex gap-2">
+            {/* 2 NÚT THAO TÁC */}
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
                 onClick={handleClosePaymentModal}
-                className="flex-1 py-3 border border-slate-300 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 transition"
+                className="flex-1 py-3 border border-slate-300 hover:bg-slate-100 rounded-2xl text-xs font-bold text-slate-700 transition cursor-pointer"
               >
                 ✕ Hủy & Đóng
               </button>
               <button
                 type="button"
                 onClick={handleMockConfirmPayment}
-                className="flex-[2] bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3 rounded-xl text-xs shadow-md active:scale-95 transition"
+                className="flex-[2] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black py-3 rounded-2xl text-xs shadow-lg shadow-emerald-600/25 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
               >
-                ✓ Mô phỏng: Đã chuyển khoản 100%
+                <span>✓</span>
+                <span>Mô phỏng: Đã chuyển khoản</span>
               </button>
             </div>
           </div>
