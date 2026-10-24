@@ -48,6 +48,9 @@ export default function UserMarketplace() {
   const [profileForm, setProfileForm] = useState({
     fullName: user?.fullName || '',
     phone: user?.phone || '',
+    bankName: user?.bankName || '',
+    bankAccountNumber: user?.bankAccountNumber || '',
+    bankAccountName: user?.bankAccountName || '',
     studentCardImage: '',
     studentCardFileName: '',
   });
@@ -91,11 +94,25 @@ export default function UserMarketplace() {
     }
   }, [activeTab, accountSection]);
 
-  // Khi người dùng đăng xuất (user === null): Đưa về tab Khám phá sân và xóa sạch dữ liệu lịch cũ
+  // Khi người dùng đăng nhập hoặc cập nhật: đồng bộ hồ sơ và thông tin hoàn tiền
   useEffect(() => {
     if (!user) {
       setActiveTab('MARKETPLACE');
       setMyBookings([]);
+    } else {
+      setProfileForm((prev) => ({
+        ...prev,
+        fullName: user.fullName || '',
+        phone: user.phone || '',
+        bankName: user.bankName || '',
+        bankAccountNumber: user.bankAccountNumber || '',
+        bankAccountName: user.bankAccountName || '',
+      }));
+      setRefundBank({
+        refundBankName: user.bankName || 'MB Bank',
+        refundAccountNumber: user.bankAccountNumber || '',
+        refundAccountName: user.bankAccountName || (user.fullName ? user.fullName.toUpperCase() : ''),
+      });
     }
   }, [user]);
 
@@ -517,8 +534,7 @@ export default function UserMarketplace() {
                       </span>
                     </div>
                     <p className="text-xs text-slate-600">
-                      🕒 Thời gian: <strong>{new Date(b.start_time).toLocaleString('vi-VN')}</strong> →{' '}
-                      <strong>{new Date(b.end_time).toLocaleTimeString('vi-VN')}</strong>
+                      🕒 Thời gian: <strong>{new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} → {new Date(b.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} ({new Date(b.start_time).toLocaleDateString('vi-VN')})</strong>
                     </p>
                     <p className="text-sm font-extrabold text-emerald-700">
                       Tổng thanh toán: {Number(b.final_price).toLocaleString()} ₫

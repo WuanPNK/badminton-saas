@@ -117,7 +117,7 @@ exports.deleteProduct = async (req, res) => {
 exports.createPosOrder = async (req, res) => {
   const tenantId = req.tenant.id;
   const staffId = req.user.id;
-  const { bookingId, paymentMethod, items } = req.body;
+  const { bookingId, courtId, note, paymentMethod, items } = req.body;
   // items: [{ productId, quantity }, ...]
 
   if (!Array.isArray(items) || items.length === 0) {
@@ -175,11 +175,11 @@ exports.createPosOrder = async (req, res) => {
       });
     }
 
-    // Tạo hóa đơn tổng (pos_orders)
+    // Tạo hóa đơn tổng (pos_orders) kèm thông tin Sân đang thanh toán
     const orderRes = await client.query(
-      `INSERT INTO pos_orders (tenant_id, staff_id, booking_id, total_amount, payment_method)
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [tenantId, staffId, bookingId || null, totalAmount, paymentMethod || 'CASH']
+      `INSERT INTO pos_orders (tenant_id, staff_id, booking_id, court_id, note, total_amount, payment_method)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+      [tenantId, staffId, bookingId || null, courtId || null, note || null, totalAmount, paymentMethod || 'CASH']
     );
 
     const newOrder = orderRes.rows[0];
@@ -212,10 +212,11 @@ exports.createPosOrder = async (req, res) => {
 exports.getPosOrders = async (req, res) => {
   try {
     const result = await db.query(
-      `SELECT po.*, u.full_name AS staff_name, b.booking_code
+      `SELECT po.*, u.full_name AS staff_name, b.booking_code, c.name AS court_name
        FROM pos_orders po
        JOIN users u ON po.staff_id = u.id
        LEFT JOIN bookings b ON po.booking_id = b.id
+       LEFT JOIN courts c ON po.court_id = c.id
        WHERE po.tenant_id = $1
        ORDER BY po.created_at DESC LIMIT 50`,
       [req.tenant.id]

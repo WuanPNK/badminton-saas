@@ -63,7 +63,8 @@ exports.register = async (req, res) => {
   const {
     fullName, email, phone, password, otpCode,
     isTenantRegister, tenantName, district, address,
-    isStudent, studentCardImage 
+    isStudent, studentCardImage,
+    bankName, bankAccountNumber, bankAccountName
   } = req.body;
 
   try {
@@ -113,9 +114,23 @@ exports.register = async (req, res) => {
       const savedCardUrl = isStudent ? saveBase64Image(studentCardImage, req) : null;
 
       await db.query(
-        `INSERT INTO users (role, full_name, email, phone, password_hash, is_email_verified, student_status, student_card_url)
-         VALUES ('USER', $1, $2, $3, $4, TRUE, $5, $6) RETURNING id, role`,
-        [fullName, email, phone, passwordHash, studentState, savedCardUrl]
+        `INSERT INTO users (
+          role, full_name, email, phone, password_hash, is_email_verified,
+          student_status, student_card_url,
+          bank_name, bank_account_number, bank_account_name
+        )
+        VALUES ('USER', $1, $2, $3, $4, TRUE, $5, $6, $7, $8, $9) RETURNING id, role`,
+        [
+          fullName,
+          email,
+          phone,
+          passwordHash,
+          studentState,
+          savedCardUrl,
+          bankName || null,
+          bankAccountNumber || null,
+          bankAccountName ? bankAccountName.toUpperCase() : null
+        ]
       );
 
       return res.status(201).json({
@@ -176,9 +191,14 @@ exports.login = async (req, res) => {
         id: user.id,
         fullName: user.full_name,
         email: user.email,
+        phone: user.phone,
         role: user.role,
         studentStatus: user.student_status,
-        tenantId: user.tenant_id
+        studentCardUrl: user.student_card_url,
+        tenantId: user.tenant_id,
+        bankName: user.bank_name,
+        bankAccountNumber: user.bank_account_number,
+        bankAccountName: user.bank_account_name
       }
     });
   } catch (error) {
@@ -232,7 +252,7 @@ exports.resetPassword = async (req, res) => {
 // 5. CẬP NHẬT THÔNG TIN CÁ NHÂN & ẢNH THẺ SINH VIÊN
 exports.updateProfile = async (req, res) => {
   const userId = req.user.id;
-  const { fullName, phone, studentCardImage } = req.body;
+  const { fullName, phone, studentCardImage, bankName, bankAccountNumber, bankAccountName } = req.body;
 
   if (!fullName || !phone) {
     return res.status(400).json({ message: 'Họ tên và Số điện thoại không được để trống.' });
@@ -265,10 +285,21 @@ exports.updateProfile = async (req, res) => {
 
     const updateRes = await db.query(
       `UPDATE users
-       SET full_name = $1, phone = $2, student_status = $3, student_card_url = $4
-       WHERE id = $5
-       RETURNING id, full_name, email, phone, role, student_status, student_card_url, tenant_id`,
-      [fullName, phone, newStudentStatus, newCardUrl, userId]
+       SET full_name = $1, phone = $2, student_status = $3, student_card_url = $4,
+           bank_name = $5, bank_account_number = $6, bank_account_name = $7
+       WHERE id = $8
+       RETURNING id, full_name, email, phone, role, student_status, student_card_url, tenant_id,
+                 bank_name, bank_account_number, bank_account_name`,
+      [
+        fullName,
+        phone,
+        newStudentStatus,
+        newCardUrl,
+        bankName || null,
+        bankAccountNumber || null,
+        bankAccountName ? bankAccountName.toUpperCase() : null,
+        userId
+      ]
     );
 
     const u = updateRes.rows[0];
@@ -283,7 +314,10 @@ exports.updateProfile = async (req, res) => {
         role: u.role,
         studentStatus: u.student_status,
         studentCardUrl: u.student_card_url,
-        tenantId: u.tenant_id
+        tenantId: u.tenant_id,
+        bankName: u.bank_name,
+        bankAccountNumber: u.bank_account_number,
+        bankAccountName: u.bank_account_name
       }
     });
   } catch (error) {

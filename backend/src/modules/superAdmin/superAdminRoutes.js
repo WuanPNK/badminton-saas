@@ -10,6 +10,13 @@ router.get('/pending-approvals', superAdminController.getPendingApprovals);
 router.put('/tenants/:id/status', superAdminController.updateTenantStatus);
 router.put('/courts/:id/status', superAdminController.updateCourtStatus);
 router.put('/students/:userId/verify', superAdminController.verifyStudentStatus);
+router.get('/all-tenants', superAdminController.getAllTenants);
+
+router.get('/plans', superAdminController.getPlans);
+router.post('/plans', superAdminController.createPlan);
+router.put('/plans/:id', superAdminController.updatePlan);
+router.delete('/plans/:id', superAdminController.deletePlan);
+
 router.get('/dashboard', superAdminController.getPlatformDashboard);
 router.post('/subscriptions/record', superAdminController.recordTenantSubscription);
 

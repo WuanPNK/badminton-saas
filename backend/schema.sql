@@ -68,6 +68,11 @@ CREATE TABLE users (
     student_status student_status DEFAULT 'NONE',
     student_card_url TEXT,
 
+    -- Thông tin tài khoản ngân hàng nhận hoàn tiền khi hủy sân trước 24h
+    bank_name VARCHAR(50),
+    bank_account_number VARCHAR(50),
+    bank_account_name VARCHAR(100),
+
     -- Khóa ngoại liên kết Nhân viên/Chủ sân với Cụm sân
     tenant_id UUID, 
 
@@ -230,9 +235,11 @@ CREATE TABLE pos_orders (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id),
     staff_id UUID NOT NULL REFERENCES users(id),
+    court_id UUID REFERENCES courts(id),     -- Sân đang gọi đồ / thanh toán (Sân 1, Sân 2...)
     booking_id UUID REFERENCES bookings(id), -- Ghép vào ca sân nếu khách mua thêm lúc đang chơi
     total_amount DECIMAL(12, 2) NOT NULL,
     payment_method VARCHAR(30) DEFAULT 'CASH', -- CASH, TRANSFER
+    note VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

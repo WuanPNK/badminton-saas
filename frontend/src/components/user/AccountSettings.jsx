@@ -242,6 +242,58 @@ export default function AccountSettings({
               )}
             </div>
 
+            {/* THÔNG TIN TÀI KHOẢN NGÂN HÀNG HOÀN TIỀN */}
+            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+              <div>
+                <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
+                  <span>🏦</span>
+                  <span>Tài khoản Ngân hàng nhận tiền hoàn (Khi hủy lịch trước 24h)</span>
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Thông tin này sẽ được tự động điền khi bạn yêu cầu hủy sân để nhận hoàn 100% tiền sân nhanh chóng.
+                </p>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Tên Ngân hàng</label>
+                  <input
+                    type="text"
+                    placeholder="VD: MB Bank, Techcombank..."
+                    value={profileForm.bankName || ''}
+                    onChange={(e) =>
+                      setProfileForm({ ...profileForm, bankName: e.target.value })
+                    }
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Số tài khoản (STK)</label>
+                  <input
+                    type="text"
+                    placeholder="VD: 19034889928282"
+                    value={profileForm.bankAccountNumber || ''}
+                    onChange={(e) =>
+                      setProfileForm({ ...profileForm, bankAccountNumber: e.target.value })
+                    }
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Tên chủ tài khoản</label>
+                  <input
+                    type="text"
+                    placeholder="VD: NGUYEN VAN A"
+                    value={profileForm.bankAccountName || ''}
+                    onChange={(e) =>
+                      setProfileForm({ ...profileForm, bankAccountName: e.target.value })
+                    }
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs uppercase font-bold"
+                  />
+                </div>
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={savingAccount}
@@ -354,7 +406,7 @@ export default function AccountSettings({
                         {b.tenant_name} — {b.court_name}
                       </div>
                       <div className="text-slate-600 mt-0.5">
-                        {new Date(b.start_time).toLocaleString('vi-VN')} • Mã: #{b.booking_code}
+                        {new Date(b.start_time).toLocaleDateString('vi-VN')} {new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} • Mã: #{b.booking_code}
                       </div>
                       <div className="font-bold text-emerald-700 mt-1">
                         {Number(b.final_price).toLocaleString()} ₫ ({b.status})

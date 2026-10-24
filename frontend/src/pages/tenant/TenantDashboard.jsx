@@ -4,6 +4,8 @@ import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 import RevenueCharts from '../../components/tenant/RevenueCharts';
+import TimeSelect24, { formatTime24 } from '../../components/common/TimeSelect24';
+import ExpandableAddButton from '../../components/common/ExpandableAddButton';
 
 // Danh mục phân loại mặt hàng POS (100% Tiếng Việt)
 export const POS_CATEGORIES = [
@@ -59,6 +61,48 @@ export default function TenantDashboard() {
   const [editingRule, setEditingRule] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editingStaff, setEditingStaff] = useState(null);
+
+  // Modal Thêm Sân Mới (Popup mở từ nút "+" ở danh sách sân)
+  const [showAddCourtModal, setShowAddCourtModal] = useState(false);
+  const [showAddPricingModal, setShowAddPricingModal] = useState(false);
+  const [showAddProductModal, setShowAddProductModal] = useState(false);
+  const [showAddStaffModal, setShowAddStaffModal] = useState(false);
+
+  // Popup Xác nhận Tùy biến Hiện đại (Thay thế window.confirm mặc định của trình duyệt)
+  const [confirmModal, setConfirmModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    confirmText: 'Xác nhận',
+    cancelText: 'Hủy bỏ',
+    confirmColor: 'emerald', // 'red' | 'emerald' | 'amber'
+    icon: '⚠️',
+    onConfirm: null,
+  });
+
+  const askConfirm = ({
+    title,
+    message,
+    confirmText = 'Xác nhận',
+    cancelText = 'Hủy bỏ',
+    confirmColor = 'emerald',
+    icon = '⚠️',
+    onConfirm,
+  }) => {
+    setConfirmModal({
+      isOpen: true,
+      title,
+      message,
+      confirmText,
+      cancelText,
+      confirmColor,
+      icon,
+      onConfirm: async () => {
+        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
+        if (onConfirm) await onConfirm();
+      },
+    });
+  };
 
   // Modal Lên lịch Bảo trì Sân
   const [maintenanceModalCourt, setMaintenanceModalCourt] = useState(null);
@@ -142,43 +186,74 @@ export default function TenantDashboard() {
   };
 
   // --- 2. XỬ LÝ SÂN (CRUD & BẢO TRÌ) ---
-  const handleCreateCourt = async (e) => {
+  const triggerCreateCourt = (e) => {
     e.preventDefault();
-    try {
-      const res = await axiosClient.post('/tenant/courts', newCourt);
-      toast.success(res.data.message);
-      setNewCourt({ name: '', type: 'STANDARD' });
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi tạo sân.');
+    if (!newCourt.name.trim()) {
+      toast.error('Vui lòng nhập tên sân.');
+      return;
     }
+    askConfirm({
+      title: 'Xác nhận Thêm Sân Mới',
+      message: `Bạn có chắc chắn muốn thêm sân "${newCourt.name}" (${newCourt.type}) vào cụm sân?`,
+      confirmText: 'Thêm sân',
+      confirmColor: 'emerald',
+      icon: '🏸',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.post('/tenant/courts', newCourt);
+          toast.success(res.data.message);
+          setNewCourt({ name: '', type: 'STANDARD' });
+          setShowAddCourtModal(false);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi tạo sân.');
+        }
+      },
+    });
   };
 
-  const handleUpdateCourt = async (e) => {
+  const triggerUpdateCourt = (e) => {
     e.preventDefault();
     if (!editingCourt) return;
-    try {
-      const res = await axiosClient.put(`/tenant/courts/${editingCourt.id}`, {
-        name: editingCourt.name,
-        type: editingCourt.type,
-      });
-      toast.success(res.data.message);
-      setEditingCourt(null);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi cập nhật sân.');
-    }
+    askConfirm({
+      title: 'Xác nhận Lưu thay đổi Sân',
+      message: `Lưu các cập nhật cho sân "${editingCourt.name}"?`,
+      confirmText: 'Lưu thay đổi',
+      confirmColor: 'emerald',
+      icon: '✏️',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.put(`/tenant/courts/${editingCourt.id}`, {
+            name: editingCourt.name,
+            type: editingCourt.type,
+          });
+          toast.success(res.data.message);
+          setEditingCourt(null);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi cập nhật sân.');
+        }
+      },
+    });
   };
 
-  const handleDeleteCourt = async (courtId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa sân này khỏi danh sách?')) return;
-    try {
-      const res = await axiosClient.delete(`/tenant/courts/${courtId}`);
-      toast.success(res.data.message);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi xóa sân.');
-    }
+  const handleDeleteCourt = (court) => {
+    askConfirm({
+      title: 'Xác nhận Xóa Sân',
+      message: `Bạn có chắc chắn muốn xóa sân "${court.name}" khỏi cụm sân? Thao tác này sẽ xóa sân khỏi hệ thống.`,
+      confirmText: 'Xóa sân này',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.delete(`/tenant/courts/${court.id}`);
+          toast.success(res.data.message);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi xóa sân.');
+        }
+      },
+    });
   };
 
   const openMaintenanceModal = (court) => {
@@ -191,130 +266,201 @@ export default function TenantDashboard() {
     setMaintNote('Bảo trì định kỳ mặt sân & hệ thống đèn');
   };
 
-  const handleSaveMaintenance = async (e) => {
+  const triggerSaveMaintenance = (e) => {
     e.preventDefault();
     if (!maintenanceModalCourt) return;
-
-    try {
-      const payload = {
-        isUnderMaintenance: true,
-        maintenanceStart: maintScheduleMode === 'SCHEDULE' ? maintStartTime : new Date().toISOString(),
-        maintenanceNote: maintNote,
-      };
-
-      const res = await axiosClient.put(
-        `/tenant/courts/${maintenanceModalCourt.id}/maintenance`,
-        payload
-      );
-      toast.success(res.data.message);
-      setMaintenanceModalCourt(null);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi khi lên lịch bảo trì.');
-    }
+    askConfirm({
+      title: 'Xác nhận Đặt lịch Bảo trì',
+      message: `Đưa sân "${maintenanceModalCourt.name}" vào trạng thái bảo trì? Khách hàng sẽ không thể đặt khung giờ này.`,
+      confirmText: 'Xác nhận bảo trì',
+      confirmColor: 'amber',
+      icon: '🔧',
+      onConfirm: async () => {
+        try {
+          const payload = {
+            isUnderMaintenance: true,
+            maintenanceStart: maintScheduleMode === 'SCHEDULE' ? maintStartTime : new Date().toISOString(),
+            maintenanceNote: maintNote,
+          };
+          const res = await axiosClient.put(
+            `/tenant/courts/${maintenanceModalCourt.id}/maintenance`,
+            payload
+          );
+          toast.success(res.data.message);
+          setMaintenanceModalCourt(null);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi khi lên lịch bảo trì.');
+        }
+      },
+    });
   };
 
-  const handleEndMaintenance = async (court) => {
-    try {
-      const res = await axiosClient.put(`/tenant/courts/${court.id}/maintenance`, {
-        isUnderMaintenance: false,
-      });
-      toast.success(res.data.message);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi kết thúc bảo trì.');
-    }
+  const triggerEndMaintenance = (court) => {
+    askConfirm({
+      title: 'Hoàn tất Bảo trì & Mở sân',
+      message: `Xác nhận mở lại sân "${court.name}" để khách hàng có thể tiếp tục đặt lịch?`,
+      confirmText: 'Mở lại sân',
+      confirmColor: 'emerald',
+      icon: '✅',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.put(`/tenant/courts/${court.id}/maintenance`, {
+            isUnderMaintenance: false,
+          });
+          toast.success(res.data.message);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi kết thúc bảo trì.');
+        }
+      },
+    });
   };
 
   // --- 3. XỬ LÝ KHUNG GIÁ ĐỘNG (CRUD) ---
-  const handleCreatePricingRule = async (e) => {
+  const triggerCreatePricingRule = (e) => {
     e.preventDefault();
-    try {
-      await axiosClient.post('/tenant/pricing-rules', {
-        ...newRule,
-        daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
-      });
-      toast.success('Đã thêm khung giá động thành công!');
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi thêm giá động.');
-    }
+    askConfirm({
+      title: 'Xác nhận Thêm Khung giá',
+      message: `Thêm khung giá ${Number(newRule.pricePerHour).toLocaleString()} ₫/h (${formatTime24(newRule.startTime)} → ${formatTime24(newRule.endTime)}) cho sân ${newRule.courtType}?`,
+      confirmText: 'Thêm khung giá',
+      confirmColor: 'emerald',
+      icon: '💰',
+      onConfirm: async () => {
+        try {
+          await axiosClient.post('/tenant/pricing-rules', {
+            ...newRule,
+            daysOfWeek: [1, 2, 3, 4, 5, 6, 7],
+          });
+          toast.success('Đã thêm khung giá động thành công!');
+          setShowAddPricingModal(false);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi thêm giá động.');
+        }
+      },
+    });
   };
 
-  const handleUpdatePricingRule = async (e) => {
+  const triggerUpdatePricingRule = (e) => {
     e.preventDefault();
     if (!editingRule) return;
-    try {
-      await axiosClient.put(`/tenant/pricing-rules/${editingRule.id}`, {
-        courtType: editingRule.court_type,
-        startTime: editingRule.start_time,
-        endTime: editingRule.end_time,
-        pricePerHour: editingRule.price_per_hour,
-        daysOfWeek: editingRule.days_of_week || [1, 2, 3, 4, 5, 6, 7],
-      });
-      toast.success('Đã cập nhật khung giá thành công!');
-      setEditingRule(null);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi cập nhật khung giá.');
-    }
+    askConfirm({
+      title: 'Xác nhận Lưu Khung giá',
+      message: `Lưu thay đổi khung giá ${Number(editingRule.price_per_hour).toLocaleString()} ₫/h (${formatTime24(editingRule.start_time)} → ${formatTime24(editingRule.end_time)})?`,
+      confirmText: 'Lưu thay đổi',
+      confirmColor: 'emerald',
+      icon: '✏️',
+      onConfirm: async () => {
+        try {
+          await axiosClient.put(`/tenant/pricing-rules/${editingRule.id}`, {
+            courtType: editingRule.court_type,
+            startTime: editingRule.start_time,
+            endTime: editingRule.end_time,
+            pricePerHour: editingRule.price_per_hour,
+            daysOfWeek: editingRule.days_of_week || [1, 2, 3, 4, 5, 6, 7],
+          });
+          toast.success('Đã cập nhật khung giá thành công!');
+          setEditingRule(null);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi cập nhật khung giá.');
+        }
+      },
+    });
   };
 
-  const handleDeletePricingRule = async (ruleId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa khung giá này?')) return;
-    try {
-      await axiosClient.delete(`/tenant/pricing-rules/${ruleId}`);
-      toast.success('Đã xóa khung giá.');
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi xóa khung giá.');
-    }
+  const handleDeletePricingRule = (rule) => {
+    askConfirm({
+      title: 'Xác nhận Xóa Khung giá',
+      message: `Bạn có chắc chắn muốn xóa khung giá (${formatTime24(rule.start_time)} → ${formatTime24(rule.end_time)}) của sân ${rule.court_type}?`,
+      confirmText: 'Xóa khung giá',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: async () => {
+        try {
+          await axiosClient.delete(`/tenant/pricing-rules/${rule.id}`);
+          toast.success('Đã xóa khung giá.');
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi xóa khung giá.');
+        }
+      },
+    });
   };
 
   // --- 4. XỬ LÝ KHO HÀNG POS (CRUD) ---
-  const handleCreateProduct = async (e) => {
+  const triggerCreateProduct = (e) => {
     e.preventDefault();
-    try {
-      await axiosClient.post('/pos/products', newProduct);
-      toast.success('Đã thêm sản phẩm vào kho POS!');
-      setNewProduct({ name: '', category: 'DRINK', price: 15000, stockQuantity: 50 });
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi thêm sản phẩm.');
-    }
+    if (!newProduct.name.trim()) return;
+    askConfirm({
+      title: 'Xác nhận Thêm vào Kho POS',
+      message: `Thêm mặt hàng "${newProduct.name}" (Đơn giá: ${Number(newProduct.price).toLocaleString()} ₫, Tồn kho: ${newProduct.stockQuantity}) vào kho?`,
+      confirmText: 'Thêm vào kho',
+      confirmColor: 'emerald',
+      icon: '📦',
+      onConfirm: async () => {
+        try {
+          await axiosClient.post('/pos/products', newProduct);
+          toast.success('Đã thêm sản phẩm vào kho POS!');
+          setShowAddProductModal(false);
+          setNewProduct({ name: '', category: 'DRINK', price: 15000, stockQuantity: 50 });
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi thêm sản phẩm.');
+        }
+      },
+    });
   };
 
-  const handleUpdateProduct = async (e) => {
+  const triggerUpdateProduct = (e) => {
     e.preventDefault();
     if (!editingProduct) return;
-    try {
-      await axiosClient.put(`/pos/products/${editingProduct.id}`, {
-        name: editingProduct.name,
-        category: editingProduct.category,
-        price: Number(editingProduct.price),
-        stockQuantity: Number(editingProduct.stock_quantity),
-      });
-      toast.success('Đã cập nhật sản phẩm thành công!');
-      setEditingProduct(null);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi cập nhật sản phẩm.');
-    }
+    askConfirm({
+      title: 'Xác nhận Lưu thay đổi Mặt hàng',
+      message: `Lưu các thay đổi cho mặt hàng "${editingProduct.name}"?`,
+      confirmText: 'Lưu thay đổi',
+      confirmColor: 'emerald',
+      icon: '✏️',
+      onConfirm: async () => {
+        try {
+          await axiosClient.put(`/pos/products/${editingProduct.id}`, {
+            name: editingProduct.name,
+            category: editingProduct.category,
+            price: Number(editingProduct.price),
+            stockQuantity: Number(editingProduct.stock_quantity),
+          });
+          toast.success('Đã cập nhật sản phẩm thành công!');
+          setEditingProduct(null);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi cập nhật sản phẩm.');
+        }
+      },
+    });
   };
 
-  const handleDeleteProduct = async (productId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa mặt hàng này khỏi kho?')) return;
-    try {
-      const res = await axiosClient.delete(`/pos/products/${productId}`);
-      toast.success(res.data.message);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi xóa sản phẩm.');
-    }
+  const handleDeleteProduct = (prod) => {
+    askConfirm({
+      title: 'Xác nhận Xóa Mặt hàng',
+      message: `Bạn có chắc chắn muốn xóa mặt hàng "${prod.name}" khỏi kho POS?`,
+      confirmText: 'Xóa mặt hàng',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.delete(`/pos/products/${prod.id}`);
+          toast.success(res.data.message);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi xóa sản phẩm.');
+        }
+      },
+    });
   };
 
   // --- 5. XỬ LÝ TÀI KHOẢN LỄ TÂN (CRUD VỚI XÁC NHẬN MẬT KHẨU) ---
-  const handleCreateStaff = async (e) => {
+  const triggerCreateStaff = (e) => {
     e.preventDefault();
     if (newStaff.password !== newStaff.confirmPassword) {
       toast.error('Mật khẩu và xác nhận mật khẩu không khớp!');
@@ -324,23 +470,32 @@ export default function TenantDashboard() {
       toast.error('Mật khẩu phải có ít nhất 6 ký tự.');
       return;
     }
-
-    try {
-      const res = await axiosClient.post('/tenant/staff', {
-        fullName: newStaff.fullName,
-        email: newStaff.email,
-        phone: newStaff.phone,
-        password: newStaff.password,
-      });
-      toast.success(res.data.message);
-      setNewStaff({ fullName: '', email: '', phone: '', password: '', confirmPassword: '' });
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi tạo nhân viên.');
-    }
+    askConfirm({
+      title: 'Xác nhận Cấp tài khoản Lễ tân',
+      message: `Cấp tài khoản lễ tân mới cho "${newStaff.fullName}" (${newStaff.email})?`,
+      confirmText: 'Cấp tài khoản',
+      confirmColor: 'emerald',
+      icon: '👤',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.post('/tenant/staff', {
+            fullName: newStaff.fullName,
+            email: newStaff.email,
+            phone: newStaff.phone,
+            password: newStaff.password,
+          });
+          toast.success(res.data.message);
+          setShowAddStaffModal(false);
+          setNewStaff({ fullName: '', email: '', phone: '', password: '', confirmPassword: '' });
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi tạo nhân viên.');
+        }
+      },
+    });
   };
 
-  const handleUpdateStaff = async (e) => {
+  const triggerUpdateStaff = (e) => {
     e.preventDefault();
     if (!editingStaff) return;
 
@@ -355,30 +510,47 @@ export default function TenantDashboard() {
       }
     }
 
-    try {
-      const res = await axiosClient.put(`/tenant/staff/${editingStaff.id}`, {
-        fullName: editingStaff.full_name,
-        phone: editingStaff.phone,
-        password: editingStaff.newPassword || undefined,
-        isActive: editingStaff.is_active,
-      });
-      toast.success(res.data.message);
-      setEditingStaff(null);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi cập nhật nhân viên.');
-    }
+    askConfirm({
+      title: 'Xác nhận Cập nhật Lễ tân',
+      message: `Lưu thay đổi thông tin cho nhân viên "${editingStaff.full_name}"?`,
+      confirmText: 'Lưu thay đổi',
+      confirmColor: 'emerald',
+      icon: '✏️',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.put(`/tenant/staff/${editingStaff.id}`, {
+            fullName: editingStaff.full_name,
+            phone: editingStaff.phone,
+            password: editingStaff.newPassword || undefined,
+            isActive: editingStaff.is_active,
+          });
+          toast.success(res.data.message);
+          setEditingStaff(null);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi cập nhật nhân viên.');
+        }
+      },
+    });
   };
 
-  const handleDeleteStaff = async (staffId) => {
-    if (!window.confirm('Bạn có chắc chắn muốn xóa hoặc vô hiệu hóa tài khoản lễ tân này?')) return;
-    try {
-      const res = await axiosClient.delete(`/tenant/staff/${staffId}`);
-      toast.success(res.data.message);
-      fetchTenantData();
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi xóa nhân viên.');
-    }
+  const handleDeleteStaff = (staff) => {
+    askConfirm({
+      title: 'Xác nhận Xóa / Khóa Lễ tân',
+      message: `Bạn có chắc chắn muốn xóa hoặc vô hiệu hóa tài khoản của lễ tân "${staff.full_name}"?`,
+      confirmText: 'Xóa tài khoản',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.delete(`/tenant/staff/${staff.id}`);
+          toast.success(res.data.message);
+          fetchTenantData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi xóa nhân viên.');
+        }
+      },
+    });
   };
 
   // --- 6. XỬ LÝ ĐIỀU KHOẢN, QUY ĐỊNH & ẢNH SÂN ---
@@ -720,138 +892,120 @@ export default function TenantDashboard() {
               </div>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
-              {/* FORM TẠO SÂN MỚI */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 h-fit">
-                <h3 className="font-extrabold text-slate-900 text-base">Thêm Sân mới</h3>
-                <form onSubmit={handleCreateCourt} className="space-y-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Tên sân</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="VD: Sân Tiêu Chuẩn 03, Sân VIP 02"
-                      value={newCourt.name}
-                      onChange={(e) => setNewCourt({ ...newCourt, name: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Phân loại sân</label>
-                    <select
-                      value={newCourt.type}
-                      onChange={(e) => setNewCourt({ ...newCourt, type: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
-                    >
-                      <option value="STANDARD">Sân STANDARD (Tiêu chuẩn)</option>
-                      {tenant.enable_vip_courts && <option value="VIP">Sân VIP (Cao cấp)</option>}
-                    </select>
-                    {!tenant.enable_vip_courts && (
-                      <p className="text-[11px] text-amber-600 mt-1">
-                        * Cần bật công tắc "Sử dụng Sân VIP" trong phần Cài đặt để tạo sân VIP.
-                      </p>
-                    )}
-                  </div>
-                  <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-sm">
-                    + Thêm Sân vào Cụm
-                  </button>
-                </form>
+            {/* DANH SÁCH SÂN TOÀN BẢNG (FULL-WIDTH) */}
+            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">
+                    Danh sách Sân ({courts.length})
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Toàn bộ sân đấu đang quản lý trong cụm sân
+                  </p>
+                </div>
+                <ExpandableAddButton
+                  label="Thêm sân mới"
+                  onClick={() => setShowAddCourtModal(true)}
+                />
               </div>
 
-              {/* DANH SÁCH SÂN */}
-              <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-                <h3 className="font-extrabold text-slate-900 text-base">Danh sách Sân ({courts.length})</h3>
-
-                <div className="space-y-3">
-                  {courts.map((c) => (
-                    <div
-                      key={c.id}
-                      className="p-4 border border-slate-200/80 bg-slate-50/70 rounded-2xl flex flex-wrap justify-between items-center gap-3 text-xs"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <strong className="text-slate-900 text-sm">{c.name}</strong>
-                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-                            c.type === 'VIP' ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-blue-100 text-blue-900 border-blue-200'
-                          }`}>
-                            {c.type}
-                          </span>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              c.status === 'PUBLISHED'
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-amber-100 text-amber-800'
-                            }`}
-                          >
-                            {c.status}
-                          </span>
-                        </div>
-
-                        {c.is_under_maintenance && (
-                          <div className="text-[11px] text-red-600 font-bold flex items-center gap-1">
-                            <span>🔧 Đang bảo trì</span>
-                            {c.maintenance_start && (
-                              <span>từ {new Date(c.maintenance_start).toLocaleString('vi-VN')}</span>
-                            )}
-                            {c.maintenance_note && (
-                              <span className="text-slate-500 font-normal">({c.maintenance_note})</span>
-                            )}
-                          </div>
-                        )}
+              <div className="space-y-3">
+                {courts.map((c) => (
+                  <div
+                    key={c.id}
+                    className="p-4 sm:p-5 border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:shadow-sm rounded-2xl flex flex-wrap justify-between items-center gap-3 text-xs transition"
+                  >
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <strong className="text-slate-900 text-sm font-black">{c.name}</strong>
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                          c.type === 'VIP' ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-blue-100 text-blue-900 border-blue-200'
+                        }`}>
+                          {c.type}
+                        </span>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            c.status === 'PUBLISHED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {c.status}
+                        </span>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {/* NÚT BẢO TRÌ */}
-                        {c.is_under_maintenance ? (
-                          <button
-                            type="button"
-                            onClick={() => handleEndMaintenance(c)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl transition text-[11px] shadow-sm"
-                          >
-                            ✓ Hoàn tất bảo trì (Mở sân)
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => openMaintenanceModal(c)}
-                            className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-xl transition text-[11px]"
-                          >
-                            🔧 Đặt lịch bảo trì
-                          </button>
-                        )}
+                      {c.is_under_maintenance && (
+                        <div className="text-[11px] text-red-600 font-bold flex items-center gap-1">
+                          <span>🔧 Đang bảo trì</span>
+                          {c.maintenance_start && (
+                            <span>
+                              từ {new Date(c.maintenance_start).toLocaleDateString('vi-VN')}{' '}
+                              {new Date(c.maintenance_start).toLocaleTimeString('vi-VN', {
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false,
+                              })}
+                            </span>
+                          )}
+                          {c.maintenance_note && (
+                            <span className="text-slate-500 font-normal">({c.maintenance_note})</span>
+                          )}
+                        </div>
+                      )}
+                    </div>
 
-                        {/* NÚT SỬA SÂN */}
+                    <div className="flex items-center gap-2">
+                      {/* NÚT BẢO TRÌ */}
+                      {c.is_under_maintenance ? (
                         <button
                           type="button"
-                          onClick={() => setEditingCourt(c)}
+                          onClick={() => triggerEndMaintenance(c)}
+                          className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl transition text-[11px] shadow-sm"
+                        >
+                          ✓ Hoàn tất bảo trì (Mở sân)
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => openMaintenanceModal(c)}
                           className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-xl transition text-[11px]"
                         >
-                          ✏️ Sửa
+                          🔧 Đặt lịch bảo trì
                         </button>
+                      )}
 
-                        {/* NÚT XÓA SÂN */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteCourt(c.id)}
-                          className="text-red-500 hover:bg-red-50 p-1.5 rounded-xl transition font-bold"
-                          title="Xóa sân"
-                        >
-                          🗑️
-                        </button>
-                      </div>
+                      {/* NÚT SỬA SÂN */}
+                      <button
+                        type="button"
+                        onClick={() => setEditingCourt(c)}
+                        className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-xl transition text-[11px]"
+                      >
+                        ✏️ Sửa
+                      </button>
+
+                      {/* NÚT XÓA SÂN */}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCourt(c)}
+                        className="text-red-500 hover:bg-red-50 p-1.5 rounded-xl transition font-bold"
+                        title="Xóa sân"
+                      >
+                        🗑️
+                      </button>
                     </div>
-                  ))}
-                  {courts.length === 0 && (
-                    <p className="text-xs text-slate-400 py-6 text-center">Chưa có sân nào.</p>
-                  )}
-                </div>
+                  </div>
+                ))}
+
+                {courts.length === 0 && (
+                  <p className="text-xs text-slate-400 py-8 text-center">Chưa có sân nào trong cụm sân.</p>
+                )}
               </div>
             </div>
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* TAB 3: BẢNG GIÁ ĐỘNG (CRUD ĐẦY ĐỦ) */}
+        {/* TAB 3: BẢNG GIÁ ĐỘNG (FULL-WIDTH + NÚT EXPANDABLE GÓC PHẢI) */}
         {/* ========================================================= */}
         {tab === 'PRICING_RULES' && (
           <div className="space-y-6">
@@ -862,111 +1016,67 @@ export default function TenantDashboard() {
               </p>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
-              {/* FORM THÊM KHUNG GIÁ */}
-              <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 h-fit">
-                <h3 className="font-extrabold text-slate-900 text-base">Thêm Khung Giá Mới</h3>
-                <form onSubmit={handleCreatePricingRule} className="space-y-3 text-xs">
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Loại sân áp dụng</label>
-                    <select
-                      value={newRule.courtType}
-                      onChange={(e) => setNewRule({ ...newRule, courtType: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
-                    >
-                      <option value="STANDARD">Sân STANDARD</option>
-                      <option value="VIP">Sân VIP</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block font-bold text-slate-700 mb-1">Đơn giá thuê mỗi giờ (VNĐ/h)</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="VD: 120000"
-                      value={newRule.pricePerHour}
-                      onChange={(e) => setNewRule({ ...newRule, pricePerHour: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Từ giờ</label>
-                      <input
-                        type="time"
-                        value={newRule.startTime}
-                        onChange={(e) => setNewRule({ ...newRule, startTime: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-                      />
-                    </div>
-                    <div>
-                      <label className="block font-bold text-slate-700 mb-1">Đến giờ</label>
-                      <input
-                        type="time"
-                        value={newRule.endTime}
-                        onChange={(e) => setNewRule({ ...newRule, endTime: e.target.value })}
-                        className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl"
-                      />
-                    </div>
-                  </div>
-                  <button className="w-full bg-slate-900 hover:bg-slate-800 text-white py-3 rounded-xl font-bold transition shadow-sm">
-                    + Thêm Khung Giá Động
-                  </button>
-                </form>
+            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                <div>
+                  <h3 className="font-extrabold text-slate-900 text-base">
+                    Khung giá đang áp dụng ({pricingRules.length})
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Biểu phí giờ chơi theo loại sân tiêu chuẩn và VIP
+                  </p>
+                </div>
+                <ExpandableAddButton
+                  label="Thêm khung giá"
+                  onClick={() => setShowAddPricingModal(true)}
+                />
               </div>
 
-              {/* DANH SÁCH KHUNG GIÁ */}
-              <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-                <h3 className="font-extrabold text-slate-900 text-base">
-                  Khung giá đang áp dụng ({pricingRules.length})
-                </h3>
-
-                <div className="space-y-2.5">
-                  {pricingRules.map((r) => (
-                    <div
-                      key={r.id}
-                      className="p-4 border border-slate-200/80 rounded-2xl flex justify-between items-center text-xs bg-slate-50"
-                    >
-                      <div className="space-y-1">
-                        <span className="font-bold text-slate-800">
-                          Sân <strong className="text-emerald-700">{r.court_type}</strong>: {r.start_time} → {r.end_time}
-                        </span>
-                        <div className="text-[11px] text-slate-400">Áp dụng tất cả các ngày trong tuần</div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <strong className="text-emerald-700 text-sm">
-                          {Number(r.price_per_hour).toLocaleString()} ₫/h
-                        </strong>
-                        <button
-                          type="button"
-                          onClick={() => setEditingRule(r)}
-                          className="bg-white border px-2.5 py-1 rounded-lg text-slate-700 hover:bg-slate-100 font-bold"
-                        >
-                          ✏️ Sửa
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeletePricingRule(r.id)}
-                          className="text-red-500 hover:bg-red-50 p-1 rounded-lg font-bold"
-                          title="Xóa khung giá"
-                        >
-                          ✕
-                        </button>
-                      </div>
+              <div className="space-y-2.5">
+                {pricingRules.map((r) => (
+                  <div
+                    key={r.id}
+                    className="p-4 sm:p-5 border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:shadow-sm rounded-2xl flex justify-between items-center text-xs transition"
+                  >
+                    <div className="space-y-1">
+                      <span className="font-bold text-slate-800 text-sm">
+                        Sân <strong className="text-emerald-700">{r.court_type}</strong>: {formatTime24(r.start_time)} → {formatTime24(r.end_time)}
+                      </span>
+                      <div className="text-[11px] text-slate-400">Áp dụng tất cả các ngày trong tuần</div>
                     </div>
-                  ))}
-                  {pricingRules.length === 0 && (
-                    <p className="text-xs text-slate-400 py-6 text-center">Chưa có khung giá nào được cài đặt.</p>
-                  )}
-                </div>
+
+                    <div className="flex items-center gap-3">
+                      <strong className="text-emerald-700 text-base font-black">
+                        {Number(r.price_per_hour).toLocaleString()} ₫/h
+                      </strong>
+                      <button
+                        type="button"
+                        onClick={() => setEditingRule(r)}
+                        className="bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-slate-700 font-bold transition text-xs shadow-sm"
+                      >
+                        ✏️ Sửa
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePricingRule(r)}
+                        className="text-red-500 hover:bg-red-50 p-2 rounded-xl font-bold transition text-sm"
+                        title="Xóa khung giá"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {pricingRules.length === 0 && (
+                  <p className="text-xs text-slate-400 py-8 text-center">Chưa có khung giá nào được cài đặt.</p>
+                )}
               </div>
             </div>
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* TAB 4: KHO HÀNG POS (CRUD ĐẦY ĐỦ + MỞ RỘNG PHÂN LOẠI TIẾNG VIỆT) */}
+        {/* TAB 4: KHO HÀNG POS (FULL-WIDTH + NÚT EXPANDABLE GÓC PHẢI) */}
         {/* ========================================================= */}
         {tab === 'POS_INVENTORY' && tenant.enable_pos_module && (
           <div className="space-y-6">
@@ -977,130 +1087,75 @@ export default function TenantDashboard() {
               </p>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
-              {/* FORM THÊM SẢN PHẨM */}
-              <form
-                onSubmit={handleCreateProduct}
-                className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4 h-fit"
-              >
-                <h3 className="font-extrabold text-slate-900 text-base">Nhập Hàng Mới Vào Kho</h3>
+            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Tên mặt hàng</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: Nước Revive, Quấn cán Yonex, Salonpas"
-                    value={newProduct.name}
-                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                  />
+                  <h3 className="font-extrabold text-slate-900 text-base">
+                    Danh sách Tồn kho ({products.length} mặt hàng)
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Toàn bộ mặt hàng giải khát, phụ kiện và dịch vụ trong kho
+                  </p>
                 </div>
+                <ExpandableAddButton
+                  label="Nhập hàng mới"
+                  onClick={() => setShowAddProductModal(true)}
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Phân loại hàng hóa</label>
-                  <select
-                    value={newProduct.category}
-                    onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold"
-                  >
-                    {POS_CATEGORIES.map((cat) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Đơn giá bán (VNĐ)</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="15000"
-                      value={newProduct.price}
-                      onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">Số lượng tồn kho</label>
-                    <input
-                      type="number"
-                      required
-                      placeholder="50"
-                      value={newProduct.stockQuantity}
-                      onChange={(e) => setNewProduct({ ...newProduct, stockQuantity: e.target.value })}
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                    />
-                  </div>
-                </div>
-
-                <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-sm">
-                  + Thêm Vào Kho POS
-                </button>
-              </form>
-
-              {/* DANH SÁCH TỒN KHO */}
-              <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-                <h3 className="font-extrabold text-slate-900 text-base">
-                  Danh sách Tồn kho ({products.length} mặt hàng)
-                </h3>
-
-                <div className="space-y-2.5">
-                  {products.map((p) => {
-                    const catObj = POS_CATEGORIES.find((c) => c.value === p.category) || {
-                      label: p.category,
-                      color: 'bg-slate-100 text-slate-800 border-slate-200',
-                    };
-                    return (
-                      <div
-                        key={p.id}
-                        className="p-4 border border-slate-200/80 bg-slate-50/70 rounded-2xl flex flex-wrap justify-between items-center gap-3 text-xs"
-                      >
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <strong className="text-slate-900 text-sm">{p.name}</strong>
-                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${catObj.color}`}>
-                              {catObj.label}
-                            </span>
-                          </div>
-                          <div className="text-[11px] text-slate-500">
-                            Giá bán: <strong className="text-emerald-700 font-bold">{Number(p.price).toLocaleString()} ₫</strong> • Tồn kho: <strong className="text-slate-900">{p.stock_quantity}</strong>
-                          </div>
-                        </div>
-
+              <div className="space-y-2.5">
+                {products.map((p) => {
+                  const catObj = POS_CATEGORIES.find((c) => c.value === p.category) || {
+                    label: p.category,
+                    color: 'bg-slate-100 text-slate-800 border-slate-200',
+                  };
+                  return (
+                    <div
+                      key={p.id}
+                      className="p-4 sm:p-5 border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:shadow-sm rounded-2xl flex flex-wrap justify-between items-center gap-3 text-xs transition"
+                    >
+                      <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setEditingProduct(p)}
-                            className="bg-white border px-3 py-1.5 rounded-xl text-slate-700 hover:bg-slate-100 font-bold text-[11px]"
-                          >
-                            ✏️ Sửa
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteProduct(p.id)}
-                            className="text-red-500 hover:bg-red-50 p-1.5 rounded-xl font-bold transition"
-                            title="Xóa mặt hàng"
-                          >
-                            🗑️
-                          </button>
+                          <strong className="text-slate-900 text-sm font-black">{p.name}</strong>
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${catObj.color}`}>
+                            {catObj.label}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-500">
+                          Giá bán: <strong className="text-emerald-700 font-bold">{Number(p.price).toLocaleString()} ₫</strong> • Tồn kho: <strong className="text-slate-900 font-extrabold">{p.stock_quantity}</strong>
                         </div>
                       </div>
-                    );
-                  })}
-                  {products.length === 0 && (
-                    <p className="text-xs text-slate-400 py-6 text-center">Kho hàng POS hiện đang trống.</p>
-                  )}
-                </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setEditingProduct(p)}
+                          className="bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-slate-700 font-bold text-xs shadow-sm transition"
+                        >
+                          ✏️ Sửa
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteProduct(p)}
+                          className="text-red-500 hover:bg-red-50 p-2 rounded-xl font-bold transition text-sm"
+                          title="Xóa mặt hàng"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {products.length === 0 && (
+                  <p className="text-xs text-slate-400 py-8 text-center">Kho hàng POS hiện đang trống.</p>
+                )}
               </div>
             </div>
           </div>
         )}
 
         {/* ========================================================= */}
-        {/* TAB 5: TÀI KHOẢN LỄ TÂN (CRUD + XÁC NHẬN MẬT KHẨU) */}
+        {/* TAB 5: TÀI KHOẢN LỄ TÂN (FULL-WIDTH + NÚT EXPANDABLE GÓC PHẢI) */}
         {/* ========================================================= */}
         {tab === 'STAFF' && (
           <div className="space-y-6">
@@ -1111,140 +1166,74 @@ export default function TenantDashboard() {
               </p>
             </div>
 
-            <div className="grid lg:grid-cols-3 gap-6">
-              {/* FORM TẠO LỄ TÂN */}
-              <form
-                onSubmit={handleCreateStaff}
-                className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-3.5 h-fit"
-              >
-                <h3 className="font-extrabold text-slate-900 text-base">Cấp Tài khoản Lễ tân Mới</h3>
-
+            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Họ tên nhân viên</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="VD: Nguyễn Văn Lễ Tân"
-                    value={newStaff.fullName}
-                    onChange={(e) => setNewStaff({ ...newStaff, fullName: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                  />
+                  <h3 className="font-extrabold text-slate-900 text-base">
+                    Danh sách Nhân viên Lễ tân ({staffList.length})
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Tài khoản nhân viên trực ca tại quầy và bán hàng POS
+                  </p>
                 </div>
+                <ExpandableAddButton
+                  label="Cấp tài khoản mới"
+                  onClick={() => setShowAddStaffModal(true)}
+                />
+              </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Email đăng nhập</label>
-                  <input
-                    type="email"
-                    required
-                    placeholder="letan@gmail.com"
-                    value={newStaff.email}
-                    onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Số điện thoại</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="0903000001"
-                    value={newStaff.phone}
-                    onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Mật khẩu khởi tạo</label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Tối thiểu 6 ký tự"
-                    value={newStaff.password}
-                    onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Nhập lại mật khẩu để xác nhận
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    placeholder="Xác nhận lại mật khẩu trên"
-                    value={newStaff.confirmPassword}
-                    onChange={(e) => setNewStaff({ ...newStaff, confirmPassword: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                  />
-                </div>
-
-                <button className="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 rounded-xl text-xs font-bold transition shadow-sm">
-                  + Cấp Tài khoản Lễ tân
-                </button>
-              </form>
-
-              {/* DANH SÁCH LỄ TÂN */}
-              <div className="lg:col-span-2 bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-                <h3 className="font-extrabold text-slate-900 text-base">
-                  Danh sách Lễ tân ({staffList.length})
-                </h3>
-
-                <div className="space-y-3">
-                  {staffList.map((st) => (
-                    <div
-                      key={st.id}
-                      className="p-4 border border-slate-200/80 bg-slate-50/70 rounded-2xl flex flex-wrap justify-between items-center gap-3 text-xs"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <strong className="text-slate-900 text-sm">{st.full_name}</strong>
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                              st.is_active !== false
-                                ? 'bg-emerald-100 text-emerald-800'
-                                : 'bg-red-100 text-red-800'
-                            }`}
-                          >
-                            {st.is_active !== false ? 'Đang hoạt động' : 'Đã khóa'}
-                          </span>
-                        </div>
-                        <div className="text-slate-500 text-[11px]">
-                          Email: <strong className="text-slate-800">{st.email}</strong> • SĐT: <strong className="text-slate-800">{st.phone}</strong>
-                        </div>
-                      </div>
-
+              <div className="space-y-2.5">
+                {staffList.map((st) => (
+                  <div
+                    key={st.id}
+                    className="p-4 sm:p-5 border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:shadow-sm rounded-2xl flex flex-wrap justify-between items-center gap-3 text-xs transition"
+                  >
+                    <div className="space-y-1">
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setEditingStaff({
-                              ...st,
-                              newPassword: '',
-                              confirmNewPassword: '',
-                            })
-                          }
-                          className="bg-white border px-3 py-1.5 rounded-xl text-slate-700 hover:bg-slate-100 font-bold text-[11px]"
+                        <strong className="text-slate-900 text-sm font-black">{st.full_name}</strong>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            st.is_active !== false
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}
                         >
-                          ✏️ Sửa & Đổi MK
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteStaff(st.id)}
-                          className="text-red-500 hover:bg-red-50 p-1.5 rounded-xl font-bold transition"
-                          title="Xóa hoặc Vô hiệu hóa lễ tân"
-                        >
-                          🗑️
-                        </button>
+                          {st.is_active !== false ? 'Đang hoạt động' : 'Đã khóa'}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-500 font-medium">
+                        📧 {st.email} • 📞 {st.phone || 'Chưa cập nhật SĐT'}
                       </div>
                     </div>
-                  ))}
-                  {staffList.length === 0 && (
-                    <p className="text-xs text-slate-400 py-6 text-center">Chưa có tài khoản lễ tân nào.</p>
-                  )}
-                </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditingStaff({
+                            ...st,
+                            newPassword: '',
+                            confirmNewPassword: '',
+                          })
+                        }
+                        className="bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-slate-700 font-bold text-xs shadow-sm transition"
+                      >
+                        ✏️ Sửa & Đổi MK
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteStaff(st)}
+                        className="text-red-500 hover:bg-red-50 p-2 rounded-xl font-bold transition text-sm"
+                        title="Xóa hoặc Vô hiệu hóa lễ tân"
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {staffList.length === 0 && (
+                  <p className="text-xs text-slate-400 py-8 text-center">Chưa có tài khoản lễ tân nào.</p>
+                )}
               </div>
             </div>
           </div>
@@ -1594,7 +1583,7 @@ export default function TenantDashboard() {
               Khi kích hoạt bảo trì, tài khoản khách hàng sẽ không thể chọn đặt sân trong thời gian bảo trì. Hệ thống sẽ tự động kiểm tra nếu có khách đã đặt trước sẽ cảnh báo.
             </p>
 
-            <form onSubmit={handleSaveMaintenance} className="space-y-3.5 text-xs">
+            <form onSubmit={triggerSaveMaintenance} className="space-y-3.5 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Thời điểm bắt đầu bảo trì</label>
                 <div className="grid grid-cols-2 gap-2">
@@ -1685,7 +1674,7 @@ export default function TenantDashboard() {
               ✕
             </button>
             <h3 className="text-base font-black text-slate-900">Chỉnh sửa Sân</h3>
-            <form onSubmit={handleUpdateCourt} className="space-y-3 text-xs">
+            <form onSubmit={triggerUpdateCourt} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Tên sân</label>
                 <input
@@ -1741,7 +1730,7 @@ export default function TenantDashboard() {
               ✕
             </button>
             <h3 className="text-base font-black text-slate-900">Chỉnh sửa Khung Giá</h3>
-            <form onSubmit={handleUpdatePricingRule} className="space-y-3 text-xs">
+            <form onSubmit={triggerUpdatePricingRule} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Loại sân</label>
                 <select
@@ -1765,21 +1754,19 @@ export default function TenantDashboard() {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Từ giờ</label>
-                  <input
-                    type="time"
+                  <label className="block font-bold text-slate-700 mb-1">Từ giờ (24h)</label>
+                  <TimeSelect24
                     value={editingRule.start_time}
                     onChange={(e) => setEditingRule({ ...editingRule, start_time: e.target.value })}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                    className="w-full"
                   />
                 </div>
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">Đến giờ</label>
-                  <input
-                    type="time"
+                  <label className="block font-bold text-slate-700 mb-1">Đến giờ (24h)</label>
+                  <TimeSelect24
                     value={editingRule.end_time}
                     onChange={(e) => setEditingRule({ ...editingRule, end_time: e.target.value })}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl"
+                    className="w-full"
                   />
                 </div>
               </div>
@@ -1817,7 +1804,7 @@ export default function TenantDashboard() {
               ✕
             </button>
             <h3 className="text-base font-black text-slate-900">Chỉnh sửa Mặt hàng POS</h3>
-            <form onSubmit={handleUpdateProduct} className="space-y-3 text-xs">
+            <form onSubmit={triggerUpdateProduct} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Tên sản phẩm</label>
                 <input
@@ -1898,7 +1885,7 @@ export default function TenantDashboard() {
               ✕
             </button>
             <h3 className="text-base font-black text-slate-900">Chỉnh sửa Tài khoản Lễ tân</h3>
-            <form onSubmit={handleUpdateStaff} className="space-y-3 text-xs">
+            <form onSubmit={triggerUpdateStaff} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Họ tên nhân viên</label>
                 <input
@@ -1975,6 +1962,411 @@ export default function TenantDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: THÊM KHUNG GIÁ MỚI (MỞ TỪ NÚT "+" Ở TAB BẢNG GIÁ) */}
+      {/* ========================================================= */}
+      {showAddPricingModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowAddPricingModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm transition"
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl font-black">
+                💰
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Thêm Khung Giá Mới</h3>
+                <p className="text-xs text-slate-500">Cấu hình khung giờ và đơn giá thuê sân (Định dạng 24h)</p>
+              </div>
+            </div>
+            <form onSubmit={triggerCreatePricingRule} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Loại sân áp dụng</label>
+                <select
+                  value={newRule.courtType}
+                  onChange={(e) => setNewRule({ ...newRule, courtType: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="STANDARD">Sân STANDARD (Tiêu chuẩn)</option>
+                  <option value="VIP">Sân VIP (Cao cấp)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Đơn giá thuê mỗi giờ (VNĐ/h)</label>
+                <input
+                  type="number"
+                  required
+                  placeholder="VD: 120000"
+                  value={newRule.pricePerHour}
+                  onChange={(e) => setNewRule({ ...newRule, pricePerHour: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Từ giờ (24h)</label>
+                  <TimeSelect24
+                    value={newRule.startTime}
+                    onChange={(e) => setNewRule({ ...newRule, startTime: e.target.value })}
+                    className="w-full"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Đến giờ (24h)</label>
+                  <TimeSelect24
+                    value={newRule.endTime}
+                    onChange={(e) => setNewRule({ ...newRule, endTime: e.target.value })}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddPricingModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-slate-900 hover:bg-slate-800 text-white py-2.5 rounded-xl font-bold transition shadow-sm"
+                >
+                  + Thêm Khung Giá
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: NHẬP HÀNG MỚI VÀO KHO (MỞ TỪ NÚT "+" Ở TAB POS) */}
+      {/* ========================================================= */}
+      {showAddProductModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowAddProductModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm transition"
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-xl font-black">
+                📦
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Nhập Hàng Mới Vào Kho</h3>
+                <p className="text-xs text-slate-500">Thêm mặt hàng và số lượng tồn kho ban đầu</p>
+              </div>
+            </div>
+            <form onSubmit={triggerCreateProduct} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Tên mặt hàng</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="VD: Nước Revive, Quấn cán Yonex, Salonpas"
+                  value={newProduct.name}
+                  onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Phân loại hàng hóa</label>
+                <select
+                  value={newProduct.category}
+                  onChange={(e) => setNewProduct({ ...newProduct, category: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {POS_CATEGORIES.map((cat) => (
+                    <option key={cat.value} value={cat.value}>
+                      {cat.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Đơn giá bán (VNĐ)</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="15000"
+                    value={newProduct.price}
+                    onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Số lượng tồn kho</label>
+                  <input
+                    type="number"
+                    required
+                    placeholder="50"
+                    value={newProduct.stockQuantity}
+                    onChange={(e) => setNewProduct({ ...newProduct, stockQuantity: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddProductModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold transition shadow-sm"
+                >
+                  + Thêm Vào Kho POS
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: CẤP TÀI KHOẢN LỄ TÂN (MỞ TỪ NÚT "+" Ở TAB LỄ TÂN) */}
+      {/* ========================================================= */}
+      {showAddStaffModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowAddStaffModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm transition"
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-800 flex items-center justify-center text-xl font-black">
+                👤
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Cấp Tài khoản Lễ tân Mới</h3>
+                <p className="text-xs text-slate-500">Tạo tài khoản ca trực cho nhân viên tại quầy</p>
+              </div>
+            </div>
+            <form onSubmit={triggerCreateStaff} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Họ tên nhân viên</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="VD: Nguyễn Văn Lễ Tân"
+                  value={newStaff.fullName}
+                  onChange={(e) => setNewStaff({ ...newStaff, fullName: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Email đăng nhập</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="letan@gmail.com"
+                  value={newStaff.email}
+                  onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Số điện thoại</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="0903000001"
+                  value={newStaff.phone}
+                  onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Mật khẩu khởi tạo</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Tối thiểu 6 ký tự"
+                  value={newStaff.password}
+                  onChange={(e) => setNewStaff({ ...newStaff, password: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Nhập lại mật khẩu để xác nhận
+                </label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Xác nhận lại mật khẩu trên"
+                  value={newStaff.confirmPassword}
+                  onChange={(e) => setNewStaff({ ...newStaff, confirmPassword: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddStaffModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold transition shadow-sm"
+                >
+                  + Cấp Tài khoản
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 6: THÊM SÂN MỚI (MỞ TỪ NÚT "+" Ở DƯỚI DANH SÁCH SÂN) */}
+      {/* ========================================================= */}
+      {showAddCourtModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-2xl relative border border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowAddCourtModal(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm transition"
+            >
+              ✕
+            </button>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-xl font-black">
+                🏸
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Thêm Sân Mới vào Cụm</h3>
+                <p className="text-xs text-slate-500">Khởi tạo sân tiêu chuẩn hoặc VIP</p>
+              </div>
+            </div>
+            <form onSubmit={triggerCreateCourt} className="space-y-3.5 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Tên sân</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="VD: Sân Tiêu Chuẩn 03, Sân VIP 02"
+                  value={newCourt.name}
+                  onChange={(e) => setNewCourt({ ...newCourt, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Phân loại sân</label>
+                <select
+                  value={newCourt.type}
+                  onChange={(e) => setNewCourt({ ...newCourt, type: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="STANDARD">Sân STANDARD (Tiêu chuẩn)</option>
+                  {tenant.enable_vip_courts && <option value="VIP">Sân VIP (Cao cấp)</option>}
+                </select>
+                {!tenant.enable_vip_courts && (
+                  <p className="text-[11px] text-amber-600 mt-1">
+                    * Bật công tắc "Sử dụng Sân VIP" trong tab Cấu hình Cụm sân để tạo sân VIP.
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddCourtModal(false)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold transition shadow-sm"
+                >
+                  + Thêm Sân vào Cụm
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 7: POPUP XÁC NHẬN TÙY BIẾN HIỆN ĐẠI (CUSTOM CONFIRM) */}
+      {/* ========================================================= */}
+      {confirmModal.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm ${
+                  confirmModal.confirmColor === 'red'
+                    ? 'bg-red-100 text-red-600'
+                    : confirmModal.confirmColor === 'amber'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-emerald-100 text-emerald-700'
+                }`}
+              >
+                {confirmModal.icon}
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">{confirmModal.title}</h3>
+                <p className="text-[11px] text-slate-400">Xác nhận thao tác quản lý</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              {confirmModal.message}
+            </p>
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => setConfirmModal((prev) => ({ ...prev, isOpen: false }))}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-xs text-slate-600 hover:bg-slate-100 transition"
+              >
+                {confirmModal.cancelText}
+              </button>
+              <button
+                type="button"
+                onClick={confirmModal.onConfirm}
+                className={`flex-1 py-2.5 rounded-xl text-white font-bold text-xs transition shadow-sm ${
+                  confirmModal.confirmColor === 'red'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : confirmModal.confirmColor === 'amber'
+                    ? 'bg-amber-600 hover:bg-amber-700'
+                    : 'bg-emerald-600 hover:bg-emerald-700'
+                }`}
+              >
+                {confirmModal.confirmText}
+              </button>
+            </div>
           </div>
         </div>
       )}

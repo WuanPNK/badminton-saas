@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
+import TimeSelect24 from '../../components/common/TimeSelect24';
 
 export default function StaffDashboard() {
   const { user, logout } = useAuth();
@@ -18,6 +19,7 @@ export default function StaffDashboard() {
 
   const [staffBooking, setStaffBooking] = useState({
     courtId: '',
+    courtIds: [],
     bookingType: 'WALK_IN',
     guestName: '',
     guestPhone: '',
@@ -25,6 +27,9 @@ export default function StaffDashboard() {
     endTime: '19:00',
     customPrice: '',
   });
+
+  const [posCourtId, setPosCourtId] = useState('');
+  const [posNote, setPosNote] = useState('');
 
   const loadInitial = async () => {
     try {
@@ -37,7 +42,11 @@ export default function StaffDashboard() {
       });
       setTimeline(tlRes.data);
       if (tlRes.data.courts.length > 0 && !staffBooking.courtId) {
-        setStaffBooking((prev) => ({ ...prev, courtId: tlRes.data.courts[0].id }));
+        setStaffBooking((prev) => ({
+          ...prev,
+          courtId: tlRes.data.courts[0].id,
+          courtIds: [tlRes.data.courts[0].id],
+        }));
       }
 
       const refRes = await axiosClient.get('/payments/refund-requests');
@@ -62,8 +71,14 @@ export default function StaffDashboard() {
       const startIso = `${selectedDate}T${staffBooking.startTime}:00`;
       const endIso = `${selectedDate}T${staffBooking.endTime}:00`;
 
+      if (staffBooking.bookingType === 'EVENT' && (!staffBooking.courtIds || staffBooking.courtIds.length === 0)) {
+        toast.error('Vui lòng chọn ít nhất 1 sân để tổ chức sự kiện!');
+        return;
+      }
+
       const res = await axiosClient.post('/bookings/staff-create', {
         courtId: staffBooking.courtId,
+        courtIds: staffBooking.bookingType === 'EVENT' ? staffBooking.courtIds : undefined,
         bookingType: staffBooking.bookingType,
         guestName: staffBooking.guestName,
         guestPhone: staffBooking.guestPhone,
@@ -74,7 +89,13 @@ export default function StaffDashboard() {
       });
 
       toast.success(res.data.message);
-      setStaffBooking({ ...staffBooking, guestName: '', guestPhone: '', customPrice: '' });
+      setStaffBooking((prev) => ({
+        ...prev,
+        guestName: '',
+        guestPhone: '',
+        customPrice: '',
+        courtIds: timeline.courts.length > 0 ? [timeline.courts[0].id] : [],
+      }));
       loadInitial();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Lỗi khi tạo vé.');
@@ -120,13 +141,17 @@ export default function StaffDashboard() {
   };
 
   const handleCheckoutPos = async () => {
+    if (cart.length === 0) return;
     try {
       const res = await axiosClient.post('/pos/orders', {
+        courtId: posCourtId || null,
+        note: posNote || null,
         paymentMethod: 'CASH',
         items: cart.map((c) => ({ productId: c.productId, quantity: c.quantity })),
       });
       toast.success(res.data.message);
       setCart([]);
+      setPosNote('');
       loadInitial();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Lỗi thanh toán POS.');
@@ -264,20 +289,27 @@ export default function StaffDashboard() {
                           </span>
                         </div>
                         <p className="text-slate-600 font-medium pt-0.5">
-                          🕒 {new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} →{' '}
-                          {new Date(b.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          🕒 {new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} →{' '}
+                          {new Date(b.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}
                           {b.walk_in_guest_name && <span className="ml-2 text-slate-800 font-semibold">• Khách: {b.walk_in_guest_name}</span>}
                         </p>
                       </div>
 
                       {b.status === 'CONFIRMED' && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleOperation(b.id, 'CHECK_IN')}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-bold transition shadow-sm"
-                          >
-                            📍 Khách Check-in
-                          </button>
+                        <div className="flex items-center gap-2">
+                          {b.checked_in_at ? (
+                            <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl font-black flex items-center gap-1.5 shadow-sm text-xs">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                              ✓ Đã Check-in ({new Date(b.checked_in_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })})
+                            </span>
+                          ) : (
+                            <button
+                              onClick={() => handleOperation(b.id, 'CHECK_IN')}
+                              className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-bold transition shadow-sm"
+                            >
+                              📍 Khách Check-in
+                            </button>
+                          )}
                           <button
                             onClick={() => handleOperation(b.id, 'COMPLETE')}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-bold transition shadow-sm"
@@ -316,23 +348,83 @@ export default function StaffDashboard() {
                   onChange={(e) => setStaffBooking({ ...staffBooking, bookingType: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
                 >
-                  <option value="WALK_IN">🤝 Vé Vãng Lai (WALK_IN)</option>
-                  <option value="EVENT">🏆 Vé Sự Kiện / Giải Đấu (EVENT)</option>
+                  <option value="WALK_IN">🤝 Vé Vãng Lai (WALK_IN - 1 Sân)</option>
+                  <option value="EVENT">🏆 Vé Sự Kiện / Giải Đấu (EVENT - Chọn nhiều sân)</option>
                 </select>
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Chọn Sân</label>
-                <select
-                  value={staffBooking.courtId}
-                  onChange={(e) => setStaffBooking({ ...staffBooking, courtId: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
-                >
-                  {timeline.courts.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
-                  ))}
-                </select>
-              </div>
+              {staffBooking.bookingType === 'EVENT' ? (
+                <div>
+                  <div className="flex justify-between items-center mb-1.5">
+                    <label className="text-xs font-bold text-slate-700">
+                      Chọn các Sân tổ chức Sự kiện:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const allIds = timeline.courts.map((c) => c.id);
+                        setStaffBooking((prev) => ({
+                          ...prev,
+                          courtIds: prev.courtIds?.length === allIds.length ? [] : allIds,
+                        }));
+                      }}
+                      className="text-[11px] text-emerald-600 hover:underline font-bold"
+                    >
+                      {staffBooking.courtIds?.length === timeline.courts.length ? 'Bỏ chọn' : 'Chọn tất cả'}
+                    </button>
+                  </div>
+                  <div className="space-y-1.5 p-2 bg-slate-50 border border-slate-200 rounded-xl max-h-48 overflow-y-auto">
+                    {timeline.courts.map((c) => {
+                      const isChecked = staffBooking.courtIds?.includes(c.id);
+                      return (
+                        <label
+                          key={c.id}
+                          className={`flex items-center gap-2.5 p-2 rounded-lg border text-xs cursor-pointer transition select-none ${
+                            isChecked
+                              ? 'bg-purple-50 border-purple-300 text-purple-900 font-bold'
+                              : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-100'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked || false}
+                            onChange={() => {
+                              setStaffBooking((prev) => {
+                                const exists = prev.courtIds?.includes(c.id);
+                                const updated = exists
+                                  ? prev.courtIds.filter((id) => id !== c.id)
+                                  : [...(prev.courtIds || []), c.id];
+                                return { ...prev, courtIds: updated };
+                              });
+                            }}
+                            className="w-4 h-4 rounded text-purple-600 focus:ring-purple-500"
+                          />
+                          <span className="font-semibold">{c.name}</span>
+                          <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded ml-auto text-slate-600">
+                            {c.type}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-purple-700 font-semibold mt-1">
+                    Đã chọn {staffBooking.courtIds?.length || 0}/{timeline.courts.length} sân
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Chọn Sân</label>
+                  <select
+                    value={staffBooking.courtId}
+                    onChange={(e) => setStaffBooking({ ...staffBooking, courtId: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                  >
+                    {timeline.courts.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name} ({c.type})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">Tên khách / Tên giải đấu</label>
@@ -359,23 +451,19 @@ export default function StaffDashboard() {
 
               <div className="grid grid-cols-2 gap-2.5">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Giờ bắt đầu</label>
-                  <input
-                    type="time"
-                    step="1800"
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Giờ bắt đầu (24h)</label>
+                  <TimeSelect24
                     value={staffBooking.startTime}
                     onChange={(e) => setStaffBooking({ ...staffBooking, startTime: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                    className="w-full"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Giờ kết thúc</label>
-                  <input
-                    type="time"
-                    step="1800"
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Giờ kết thúc (24h)</label>
+                  <TimeSelect24
                     value={staffBooking.endTime}
                     onChange={(e) => setStaffBooking({ ...staffBooking, endTime: e.target.value })}
-                    className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold"
+                    className="w-full"
                   />
                 </div>
               </div>
@@ -512,6 +600,35 @@ export default function StaffDashboard() {
                     </div>
                   ))
                 )}
+              </div>
+
+              <div className="space-y-2.5 pt-1 pb-2 border-b border-slate-100">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    🏟️ Sân đang gọi đồ / Thanh toán:
+                  </label>
+                  <select
+                    value={posCourtId}
+                    onChange={(e) => setPosCourtId(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="">Khách Vãng Lai / Mang Về (Không gắn sân)</option>
+                    {timeline.courts.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.type})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    placeholder="Ghi chú hóa đơn (Tên khách / SĐT)..."
+                    value={posNote}
+                    onChange={(e) => setPosNote(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-between items-end pt-3 border-t border-slate-100">

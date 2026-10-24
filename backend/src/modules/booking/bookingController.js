@@ -23,7 +23,7 @@ exports.getDailyTimeline = async (req, res) => {
     // Lấy tất cả các ca đặt đang giữ chỗ (dưới 15 phút) hoặc đã xác nhận trong ngày đó
     const bookingsRes = await db.query(
       `SELECT id, booking_code, court_id, booking_type, start_time, end_time, status,
-              walk_in_guest_name, user_id
+              walk_in_guest_name, walk_in_guest_phone, user_id, checked_in_at, final_price
        FROM bookings
        WHERE tenant_id = $1
          AND booking_date = $2
@@ -221,6 +221,7 @@ exports.createStaffBooking = async (req, res) => {
   const staffId = req.user.id;
   const {
     courtId,
+    courtIds,
     bookingType,
     guestName,
     guestPhone,
@@ -234,6 +235,15 @@ exports.createStaffBooking = async (req, res) => {
     return res.status(400).json({ message: 'Loại vé phải là WALK_IN (Vãng lai) hoặc EVENT (Sự kiện).' });
   }
 
+  // Cho phép nhiều sân khi chọn EVENT
+  const targetCourtIds = (bookingType === 'EVENT' && Array.isArray(courtIds) && courtIds.length > 0)
+    ? courtIds
+    : [courtId].filter(Boolean);
+
+  if (targetCourtIds.length === 0) {
+    return res.status(400).json({ message: 'Vui lòng chọn ít nhất 1 sân.' });
+  }
+
   const checkBlock = validateTimeBlocks(startTime, endTime);
   if (!checkBlock.valid) {
     return res.status(400).json({ message: checkBlock.message });
@@ -244,77 +254,90 @@ exports.createStaffBooking = async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    const courtRes = await client.query(
-      `SELECT * FROM courts WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
-      [courtId, tenantId]
-    );
-    if (courtRes.rows.length === 0) {
-      await client.query('ROLLBACK');
-      return res.status(404).json({ message: 'Không tìm thấy sân thuộc cụm sân của bạn.' });
+    const rulesRes = await client.query(`SELECT * FROM pricing_rules WHERE tenant_id = $1`, [tenantId]);
+    const createdBookings = [];
+
+    const parsedCustomPrice = customPrice !== undefined && customPrice !== '' ? Number(customPrice) : null;
+    const pricePerCourt = parsedCustomPrice !== null && !isNaN(parsedCustomPrice)
+      ? Math.round(parsedCustomPrice / targetCourtIds.length)
+      : null;
+
+    for (const cId of targetCourtIds) {
+      const courtRes = await client.query(
+        `SELECT * FROM courts WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
+        [cId, tenantId]
+      );
+      if (courtRes.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return res.status(404).json({ message: `Không tìm thấy sân có ID: ${cId}` });
+      }
+      const court = courtRes.rows[0];
+
+      const overlapRes = await client.query(
+        `SELECT id FROM bookings
+         WHERE court_id = $1
+           AND status IN ('PENDING', 'CONFIRMED', 'COMPLETED')
+           AND start_time < $3
+           AND end_time > $2
+         LIMIT 1`,
+        [cId, checkBlock.start, checkBlock.end]
+      );
+
+      if (overlapRes.rows.length > 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: `Sân "${court.name}" đã bị trùng lịch trong khung giờ này!` });
+      }
+
+      let courtFinalAmount = pricePerCourt;
+      if (courtFinalAmount === null) {
+        const calc = calculateBookingPrice({
+          start: checkBlock.start,
+          end: checkBlock.end,
+          courtType: court.type,
+          pricingRules: rulesRes.rows,
+          tenant: req.tenant,
+          isVerifiedStudent: false
+        });
+        courtFinalAmount = calc.finalPrice;
+      }
+
+      const prefix = bookingType === 'EVENT' ? 'EV' : 'WL';
+      const bookingCode = prefix + Math.floor(100000 + Math.random() * 900000);
+
+      const insertRes = await client.query(
+        `INSERT INTO bookings (
+          booking_code, tenant_id, court_id, booking_type,
+          walk_in_guest_name, walk_in_guest_phone, created_by_staff_id,
+          booking_date, start_time, end_time,
+          original_price, discount_applied, final_price, status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, $11, 'CONFIRMED')
+        RETURNING *`,
+        [
+          bookingCode,
+          tenantId,
+          cId,
+          bookingType,
+          guestName || (bookingType === 'EVENT' ? 'Sự Kiện / Giải Đấu' : 'Khách vãng lai'),
+          guestPhone || '',
+          staffId,
+          bookingDate,
+          checkBlock.start,
+          checkBlock.end,
+          courtFinalAmount
+        ]
+      );
+
+      createdBookings.push(insertRes.rows[0]);
     }
-
-    const overlapRes = await client.query(
-      `SELECT id FROM bookings
-       WHERE court_id = $1
-         AND status IN ('PENDING', 'CONFIRMED', 'COMPLETED')
-         AND start_time < $3
-         AND end_time > $2
-       LIMIT 1`,
-      [courtId, checkBlock.start, checkBlock.end]
-    );
-
-    if (overlapRes.rows.length > 0) {
-      await client.query('ROLLBACK');
-      return res.status(409).json({ message: 'Khung giờ này đã bị trùng lịch trên hệ thống!' });
-    }
-
-    let finalAmount = Number(customPrice);
-    if (!customPrice || isNaN(finalAmount)) {
-      const rulesRes = await client.query(`SELECT * FROM pricing_rules WHERE tenant_id = $1`, [tenantId]);
-      const calc = calculateBookingPrice({
-        start: checkBlock.start,
-        end: checkBlock.end,
-        courtType: courtRes.rows[0].type,
-        pricingRules: rulesRes.rows,
-        tenant: req.tenant,
-        isVerifiedStudent: false
-      });
-      finalAmount = calc.finalPrice;
-    }
-
-    const prefix = bookingType === 'EVENT' ? 'EV' : 'WL';
-    const bookingCode = prefix + Math.floor(100000 + Math.random() * 900000);
-
-    const insertRes = await client.query(
-      `INSERT INTO bookings (
-        booking_code, tenant_id, court_id, booking_type,
-        walk_in_guest_name, walk_in_guest_phone, created_by_staff_id,
-        booking_date, start_time, end_time,
-        original_price, discount_applied, final_price, status
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, $11, 'CONFIRMED')
-      RETURNING *`,
-      [
-        bookingCode,
-        tenantId,
-        courtId,
-        bookingType,
-        guestName || 'Khách vãng lai',
-        guestPhone || '',
-        staffId,
-        bookingDate,
-        checkBlock.start,
-        checkBlock.end,
-        finalAmount
-      ]
-    );
 
     await client.query('COMMIT');
 
     res.status(201).json({
       success: true,
-      message: `Đã tạo lịch ${bookingType === 'EVENT' ? 'Sự kiện' : 'Vãng lai'} thành công!`,
-      booking: insertRes.rows[0]
+      message: `Đã tạo lịch ${bookingType === 'EVENT' ? `Sự kiện (${createdBookings.length} sân)` : 'Vãng lai'} thành công!`,
+      bookings: createdBookings,
+      booking: createdBookings[0]
     });
   } catch (error) {
     await client.query('ROLLBACK');

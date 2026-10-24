@@ -35,6 +35,9 @@ export default function AuthPage() {
     isStudent: false,
     studentCardImage: '',
     studentCardFileName: '',
+    bankName: '',
+    bankAccountNumber: '',
+    bankAccountName: '',
     tenantName: '',
     district: 'Cầu Giấy',
     address: '',
@@ -138,6 +141,9 @@ export default function AuthPage() {
         address: form.address,
         isStudent: mode === 'REGISTER_USER' ? form.isStudent : false,
         studentCardImage: form.studentCardImage,
+        bankName: form.bankName || undefined,
+        bankAccountNumber: form.bankAccountNumber || undefined,
+        bankAccountName: form.bankAccountName || undefined,
       };
 
       const res = await axiosClient.post('/auth/register', payload);
@@ -539,6 +545,57 @@ export default function AuthPage() {
                     </label>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* THÔNG TIN TÀI KHOẢN NGÂN HÀNG (CHO KHÁCH HÀNG NHẬN HOÀN TIỀN 100%) */}
+            {mode === 'REGISTER_USER' && (
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800">
+                    <span>🏦</span>
+                    <span>Tài khoản Ngân hàng nhận tiền hoàn (Tùy chọn)</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Hệ thống sẽ chuyển tiền hoàn 100% về tài khoản này nếu bạn hủy lịch trước 24 tiếng.
+                  </p>
+                </div>
+
+                <div className="grid sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Ngân hàng</label>
+                    <input
+                      type="text"
+                      name="bankName"
+                      value={form.bankName}
+                      onChange={handleChange}
+                      placeholder="VD: MB Bank, Techcombank..."
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Số tài khoản</label>
+                    <input
+                      type="text"
+                      name="bankAccountNumber"
+                      value={form.bankAccountNumber}
+                      onChange={handleChange}
+                      placeholder="VD: 19034889928282"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Chủ tài khoản</label>
+                    <input
+                      type="text"
+                      name="bankAccountName"
+                      value={form.bankAccountName}
+                      onChange={handleChange}
+                      placeholder="VD: NGUYEN VAN A"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs uppercase font-bold focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
               </div>
             )}
 
