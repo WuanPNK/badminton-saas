@@ -196,17 +196,18 @@ export default function SuperAdminDashboard() {
     setEditingPlan(null);
     setPlanForm({
       name: '',
-      pricePerMonth: 1200000,
-      maxCourts: 10,
-      description: '',
-      badge: 'Phổ biến',
-      commissionRate: 0,
+      pricePerMonth: 199000,
+      maxCourts: 8,
+      description: 'Gói tiêu chuẩn đầy đủ tính năng cho cụm sân',
+      badge: 'Phổ biến (4-8 sân)',
+      commissionRate: 3,
       isFeatured: false,
       features: [
-        'Quản lý tối đa 10 sân cầu lông',
+        'Quản lý tối đa 8 sân cầu lông',
         'Đặt lịch trực tuyến và VietQR 24/7',
-        'Mô-đun bán hàng và kho POS',
+        'Mô-đun bán hàng và quản lý kho POS',
         'Cấu hình Bảng giá động giờ cao điểm',
+        '0% phí giao dịch đối với đơn tại quầy',
       ],
       featureInput: '',
     });
@@ -294,7 +295,7 @@ export default function SuperAdminDashboard() {
       tenantId: prefillTenantId,
       planId: defaultPlan.id || '',
       durationMonths: 6,
-      pricePerMonth: Number(defaultPlan.price_per_month || 1500000),
+      pricePerMonth: Number(defaultPlan.price_per_month || 199000),
       discountPercent: 10,
       notes: '',
     });
@@ -452,155 +453,167 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
 
-            {/* LƯỚI CARD CHỨC NĂNG (GRID NỔI BẬT NHƯ ẢNH 2 THAM KHẢO) */}
+            {/* LƯỚI CARD CHỨC NĂNG (GIAO DIỆN DỊU MẮT, RÕ RÀNG, CHUYÊN NGHIỆP) */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
               {/* CARD 1: DUYỆT HỒ SƠ CHỦ SÂN */}
               <div
                 onClick={() => setTab('TENANTS')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-rose-500 via-rose-600 to-orange-500 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-52 relative overflow-hidden"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-emerald-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center text-2xl shadow-sm">
                     🏟️
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-3 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200/70 px-3 py-1 rounded-full">
                     {approvals.pendingTenants.length} Hồ sơ chờ
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight">Duyệt Hồ Sơ Chủ Sân</h3>
-                  <p className="text-xs text-white/90 mt-1.5 line-clamp-2">
+                  <h3 className="text-lg font-black text-slate-900 group-hover:text-emerald-700 transition-colors tracking-tight">
+                    Duyệt Hồ Sơ Chủ Sân
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed font-medium">
                     Thẩm định hồ sơ cụm sân mới đăng ký, thông tin liên hệ chủ sở hữu và kích hoạt tài khoản
                   </p>
                 </div>
-                <div className="text-[11px] font-bold text-white/80 pt-2 border-t border-white/20 flex justify-between items-center">
+                <div className="text-[11px] font-bold text-slate-400 group-hover:text-emerald-600 pt-2 border-t border-slate-100 flex justify-between items-center transition-colors">
                   <span>Xem danh sách duyệt</span>
-                  <span className="group-hover:translate-x-1 transition">→</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 2: DUYỆT SÂN MỚI TẠO */}
               <div
                 onClick={() => setTab('COURTS')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-emerald-600 via-teal-600 to-cyan-600 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-52 relative overflow-hidden"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-teal-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center text-2xl shadow-sm">
                     🏸
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-3 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-teal-50 text-teal-800 border border-teal-200/70 px-3 py-1 rounded-full">
                     {approvals.pendingCourts.length} Sân chờ
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight">Duyệt Sân Mở Bán</h3>
-                  <p className="text-xs text-white/90 mt-1.5 line-clamp-2">
+                  <h3 className="text-lg font-black text-slate-900 group-hover:text-teal-700 transition-colors tracking-tight">
+                    Duyệt Sân Mở Bán
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed font-medium">
                     Kiểm duyệt các sân con (Tiêu chuẩn / VIP) do chủ sân tạo trước khi chính thức hiển thị lên sàn
                   </p>
                 </div>
-                <div className="text-[11px] font-bold text-white/80 pt-2 border-t border-white/20 flex justify-between items-center">
+                <div className="text-[11px] font-bold text-slate-400 group-hover:text-teal-600 pt-2 border-t border-slate-100 flex justify-between items-center transition-colors">
                   <span>Mở xét duyệt sân</span>
-                  <span className="group-hover:translate-x-1 transition">→</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 3: DUYỆT XÁC THỰC THẺ SINH VIÊN */}
               <div
                 onClick={() => setTab('STUDENTS')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-amber-500 via-amber-600 to-yellow-500 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-52 relative overflow-hidden"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-amber-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-100 flex items-center justify-center text-2xl shadow-sm">
                     🎓
                   </div>
-                  <span className="text-[11px] font-black bg-slate-950/30 px-3 py-1 rounded-full text-amber-200">
+                  <span className="text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-200/70 px-3 py-1 rounded-full">
                     {approvals.pendingStudents.length} Yêu cầu
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight">Duyệt Xác Thực Thẻ HSSV</h3>
-                  <p className="text-xs text-white/90 mt-1.5 line-clamp-2">
+                  <h3 className="text-lg font-black text-slate-900 group-hover:text-amber-700 transition-colors tracking-tight">
+                    Duyệt Xác Thực Thẻ HSSV
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed font-medium">
                     Xem ảnh chụp thẻ học sinh/sinh viên và cấp quyền hưởng chính sách giảm giá ưu đãi
                   </p>
                 </div>
-                <div className="text-[11px] font-bold text-white/80 pt-2 border-t border-white/20 flex justify-between items-center">
+                <div className="text-[11px] font-bold text-slate-400 group-hover:text-amber-600 pt-2 border-t border-slate-100 flex justify-between items-center transition-colors">
                   <span>Kiểm tra ảnh thẻ</span>
-                  <span className="group-hover:translate-x-1 transition">→</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 4: THAY ĐỔI GIÁ & GÓI CƯỚC SAAS */}
               <div
                 onClick={() => setTab('PRICING')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-pink-600 via-rose-600 to-purple-600 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-52 relative overflow-hidden"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-purple-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 border border-purple-100 flex items-center justify-center text-2xl shadow-sm">
                     🏷️
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-3 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-purple-50 text-purple-800 border border-purple-200/70 px-3 py-1 rounded-full">
                     {plans.length} Gói cước
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight">Cấu Hình Giá & Gói SaaS</h3>
-                  <p className="text-xs text-white/90 mt-1.5 line-clamp-2">
-                    Tùy biến giá thuê cho các chủ sân để lên trang web, chỉnh hạn mức sân, tính năng POS & VIP
+                  <h3 className="text-lg font-black text-slate-900 group-hover:text-purple-700 transition-colors tracking-tight">
+                    Cấu Hình Giá & Gói SaaS
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed font-medium">
+                    Mô hình giá thực tế ALOBO (99k – 299k/tháng, 14 ngày dùng thử, hoa hồng app 0% – 5%)
                   </p>
                 </div>
-                <div className="text-[11px] font-bold text-white/80 pt-2 border-t border-white/20 flex justify-between items-center">
+                <div className="text-[11px] font-bold text-slate-400 group-hover:text-purple-600 pt-2 border-t border-slate-100 flex justify-between items-center transition-colors">
                   <span>Tùy chỉnh bảng giá</span>
-                  <span className="group-hover:translate-x-1 transition">→</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 5: DOANH THU & BIỂU ĐỒ TRỰC QUAN */}
               <div
                 onClick={() => setTab('REVENUE')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-purple-600 via-indigo-600 to-blue-700 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-52 relative overflow-hidden"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl shadow-sm">
                     📊
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-3 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-indigo-50 text-indigo-800 border border-indigo-200/70 px-3 py-1 rounded-full">
                     Trực quan
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight">Doanh Thu & Biểu Đồ</h3>
-                  <p className="text-xs text-white/90 mt-1.5 line-clamp-2">
+                  <h3 className="text-lg font-black text-slate-900 group-hover:text-indigo-700 transition-colors tracking-tight">
+                    Doanh Thu & Biểu Đồ
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed font-medium">
                     Biểu đồ cột xu hướng 6 tháng, cơ cấu gói cước, chỉ số tài chính và xếp hạng đóng góp cụm sân
                   </p>
                 </div>
-                <div className="text-[11px] font-bold text-white/80 pt-2 border-t border-white/20 flex justify-between items-center">
+                <div className="text-[11px] font-bold text-slate-400 group-hover:text-indigo-600 pt-2 border-t border-slate-100 flex justify-between items-center transition-colors">
                   <span>Xem báo cáo chi tiết</span>
-                  <span className="group-hover:translate-x-1 transition">→</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 6: QUẢN LÝ TẤT CẢ CỤM SÂN */}
               <div
                 onClick={() => setTab('ALL_TENANTS')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-blue-600 via-cyan-700 to-slate-800 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-52 relative overflow-hidden"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-blue-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center text-2xl shadow-sm">
                     🏢
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-3 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {allTenants.length} Cụm sân
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-lg font-black tracking-tight">Danh Sách Cụm Sân</h3>
-                  <p className="text-xs text-white/90 mt-1.5 line-clamp-2">
+                  <h3 className="text-lg font-black text-slate-900 group-hover:text-blue-700 transition-colors tracking-tight">
+                    Danh Sách Cụm Sân
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed font-medium">
                     Quản lý toàn bộ cụm sân, thời hạn gói cước, gia hạn nhanh và khóa/mở khóa tài khoản
                   </p>
                 </div>
-                <div className="text-[11px] font-bold text-white/80 pt-2 border-t border-white/20 flex justify-between items-center">
+                <div className="text-[11px] font-bold text-slate-400 group-hover:text-blue-600 pt-2 border-t border-slate-100 flex justify-between items-center transition-colors">
                   <span>Quản lý hệ thống</span>
-                  <span className="group-hover:translate-x-1 transition">→</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
             </div>
@@ -949,8 +962,55 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
 
-            {/* DANH SÁCH CÁC GÓI CƯỚC HIỆN TẠI */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* THAM CHIẾU MÔ HÌNH ĐỊNH GIÁ THỰC TẾ (ALOBO SAAS) */}
+            <div className="bg-gradient-to-r from-emerald-950 via-slate-900 to-emerald-900 text-white rounded-3xl p-6 shadow-md border border-emerald-800/40 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full">
+                    Mô Hình Nghiên Cứu Thị Trường (ALOBO)
+                  </span>
+                  <span className="text-xs text-slate-300 font-bold">
+                    Cơ Chế Định Giá Kết Hợp: Phần Mềm Quản Lý Sân + Sàn Đặt Lịch Trực Tuyến
+                  </span>
+                </div>
+                <span className="text-[11px] text-emerald-400 font-bold">14 Ngày Dùng Thử Miễn Phí Full Tính Năng</span>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-4 pt-1 text-xs">
+                <div className="bg-white/10 backdrop-blur rounded-2xl p-4 border border-white/10 space-y-1">
+                  <div className="font-black text-emerald-300 text-sm flex items-center gap-1.5">
+                    <span>1. Phí thuê bao định kỳ (SaaS)</span>
+                  </div>
+                  <p className="text-slate-300 leading-relaxed text-[11px]">
+                    • <strong>Dùng thử:</strong> Miễn phí 14 ngày (mở full tính năng để trải nghiệm).<br />
+                    • <strong>Phí thuê bao:</strong> Dao động khoảng <strong>99.000 – 299.000 ₫/tháng</strong> (hoặc tính theo số lượng sân: ~30.000 – 50.000 ₫/sân/tháng).
+                  </p>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur rounded-2xl p-4 border border-white/10 space-y-1">
+                  <div className="font-black text-amber-300 text-sm flex items-center gap-1.5">
+                    <span>2. Phí hoa hồng đặt qua App</span>
+                  </div>
+                  <p className="text-slate-300 leading-relaxed text-[11px]">
+                    • <strong>Khách đặt trực tiếp qua App:</strong> Áp dụng mức chiết khấu <strong>0% – 5%</strong> giá trị đơn đặt thành công.<br />
+                    • Miễn phí 100% hoa hồng (0%) nếu chủ sân đã trả gói thuê bao phần mềm cố định VIP.
+                  </p>
+                </div>
+
+                <div className="bg-white/10 backdrop-blur rounded-2xl p-4 border border-white/10 space-y-1">
+                  <div className="font-black text-cyan-300 text-sm flex items-center gap-1.5">
+                    <span>3. Khách quen / Khách tại quầy</span>
+                  </div>
+                  <p className="text-slate-300 leading-relaxed text-[11px]">
+                    • <strong>0% phí giao dịch:</strong> Hoàn toàn không phát sinh phí đối với khách vãng lai, khách gọi điện đặt trực tiếp.<br />
+                    • Quản lý trực tiếp trên phần mềm và POS không giới hạn.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* DANH SÁCH CÁC GÓI CƯỚC HIỆN TẠI (GRID 4 CỘT HIỆN ĐẠI) */}
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
               {plans.map((p) => {
                 const planFeatures = Array.isArray(p.features)
                   ? p.features
@@ -958,17 +1018,19 @@ export default function SuperAdminDashboard() {
                   ? JSON.parse(p.features)
                   : [];
 
+                const isFree = Number(p.price_per_month) === 0;
+
                 return (
                   <div
                     key={p.id}
-                    className={`bg-white rounded-3xl p-6 sm:p-7 border ${
+                    className={`bg-white rounded-3xl p-6 border ${
                       p.is_featured
                         ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-lg'
                         : 'border-slate-200/80 shadow-sm'
                     } flex flex-col justify-between relative overflow-hidden transition hover:shadow-md`}
                   >
                     {p.is_featured && (
-                      <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-black px-4 py-1 rounded-bl-xl uppercase tracking-wider">
+                      <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-black px-3.5 py-1 rounded-bl-xl uppercase tracking-wider">
                         ★ Được chọn nhiều nhất
                       </div>
                     )}
@@ -987,20 +1049,30 @@ export default function SuperAdminDashboard() {
                       </div>
 
                       {/* Tên gói & Giá */}
-                      <h3 className="text-lg font-black text-slate-900 mt-2">{p.name}</h3>
-                      <p className="text-xs text-slate-500 mt-1 line-clamp-2">{p.description}</p>
+                      <h3 className="text-base font-black text-slate-900 mt-2">{p.name}</h3>
+                      <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">{p.description}</p>
 
                       <div className="mt-4 pb-4 border-b border-slate-100">
-                        <span className="text-3xl font-black text-slate-900">
-                          {Number(p.price_per_month).toLocaleString()} ₫
-                        </span>
-                        <span className="text-xs text-slate-400 font-bold ml-1">/ tháng</span>
-
-                        <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-2">
-                          <span>Giảm 10% khi đóng 6 tháng</span>
-                          <span>•</span>
-                          <span>Giảm 20% khi đóng 1 năm</span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-2xl font-black text-slate-900">
+                            {Number(p.price_per_month).toLocaleString()} ₫
+                          </span>
+                          <span className="text-xs text-slate-400 font-bold">
+                            {isFree ? '/ 14 ngày' : '/ tháng'}
+                          </span>
                         </div>
+
+                        {!isFree ? (
+                          <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-2">
+                            <span>Giảm 10% (6 tháng)</span>
+                            <span>•</span>
+                            <span>Giảm 20% (1 năm)</span>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-amber-600 font-bold mt-1.5">
+                            Trải nghiệm đầy đủ tính năng
+                          </div>
+                        )}
                       </div>
 
                       {/* Giới hạn & Tính năng */}
@@ -1013,9 +1085,16 @@ export default function SuperAdminDashboard() {
                         </div>
 
                         <div className="flex items-center justify-between text-slate-700 font-semibold">
-                          <span>Phí hoa hồng đơn đặt:</span>
+                          <span>Hoa hồng đặt qua App:</span>
                           <span className="font-black text-emerald-700">
-                            {Number(p.commission_rate || 0)}%
+                            {Number(p.commission_rate || 0) === 0 ? '0% (Miễn phí)' : `${p.commission_rate}%`}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center justify-between text-slate-700 font-semibold">
+                          <span>Đơn đặt tại quầy:</span>
+                          <span className="font-black text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                            0% (Miễn phí)
                           </span>
                         </div>
 
@@ -1026,7 +1105,7 @@ export default function SuperAdminDashboard() {
                           {planFeatures.map((f, idx) => (
                             <li key={idx} className="flex items-start gap-2">
                               <span className="text-emerald-600 font-bold">✓</span>
-                              <span>{f}</span>
+                              <span className="leading-snug">{f}</span>
                             </li>
                           ))}
                         </ul>

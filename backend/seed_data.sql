@@ -104,10 +104,12 @@ UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3' WHERE id IN 
 -- =========================================================
 -- 3. DỮ LIỆU GÓI CƯỚC & DOANH THU PHẦN MỀM CHO SUPER ADMIN
 -- =========================================================
-INSERT INTO subscription_plans (id, name, price_per_month, max_courts, description)
+INSERT INTO subscription_plans (id, name, price_per_month, max_courts, description, commission_rate, badge, is_featured)
 VALUES
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'Gói Cơ Bản (Basic SaaS)', 800000, 5, 'Dành cho cụm sân quy mô nhỏ dưới 5 sân'),
-    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'Gói Chuyên Nghiệp (Pro SaaS)', 1500000, 20, 'Mở khóa toàn bộ POS, Sân VIP và Báo cáo chuyên sâu');
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb0', 'Gói Trải Nghiệm (Free Trial 14 Ngày)', 0, 4, 'Miễn phí 14 ngày mở đầy đủ tính năng để chủ sân trải nghiệm phần mềm', 5, 'Dùng thử 14 ngày', FALSE),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 'Gói Khởi Nghiệp (Starter SaaS)', 99000, 4, 'Phù hợp cho cụm sân quy mô nhỏ 1–4 sân, chi phí chỉ từ ~25.000đ/sân/tháng', 5, 'Cụm sân nhỏ (1-4 sân)', FALSE),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 'Gói Tiêu Chuẩn (Standard SaaS)', 199000, 8, 'Gói phổ biến nhất cho cụm sân 4–8 sân, mở khóa POS và Bảng giá động', 3, 'Phổ biến nhất (4-8 sân)', TRUE),
+    ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb3', 'Gói Chuỗi Sân VIP (Enterprise SaaS)', 299000, 999, 'Dành cho cụm sân lớn hoặc chuỗi nhiều cơ sở, miễn phí 100% hoa hồng', 0, 'VIP Không giới hạn', FALSE);
 
 INSERT INTO tenant_subscriptions (tenant_id, plan_id, amount_paid, start_date, end_date, payment_status)
 VALUES

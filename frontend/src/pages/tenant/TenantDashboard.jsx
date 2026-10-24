@@ -110,11 +110,17 @@ export default function TenantDashboard() {
   const [maintStartTime, setMaintStartTime] = useState('');
   const [maintNote, setMaintNote] = useState('Bảo trì định kỳ mặt sân');
 
-  // Quản lý Điều khoản & Hình ảnh sân
+  // Quản lý Điều khoản, Mô tả & Hình ảnh sân (CRUD)
   const [venueImages, setVenueImages] = useState([]);
   const [newImageUrl, setNewImageUrl] = useState('');
+  const [editingImageIdx, setEditingImageIdx] = useState(null);
+  const [editingImageUrl, setEditingImageUrl] = useState('');
+  const [previewModalImage, setPreviewModalImage] = useState(null);
+
   const [venueRules, setVenueRules] = useState([]);
   const [newRuleText, setNewRuleText] = useState('');
+  const [editingRuleIdx, setEditingRuleIdx] = useState(null);
+  const [editingRuleContent, setEditingRuleContent] = useState('');
   const [venueDescription, setVenueDescription] = useState('');
 
   const fetchTenantData = async () => {
@@ -553,25 +559,97 @@ export default function TenantDashboard() {
     });
   };
 
-  // --- 6. XỬ LÝ ĐIỀU KHOẢN, QUY ĐỊNH & ẢNH SÂN ---
+  // --- 6. XỬ LÝ ĐIỀU KHOẢN, NỘI QUY & THƯ VIỆN ẢNH SÂN (CRUD) ---
   const handleAddImage = () => {
-    if (!newImageUrl.trim()) return;
+    if (!newImageUrl.trim()) {
+      toast.error('Vui lòng nhập link ảnh hợp lệ (https://...)');
+      return;
+    }
     setVenueImages([...venueImages, newImageUrl.trim()]);
     setNewImageUrl('');
+    toast.success('Đã thêm ảnh vào danh sách! Bấm "Lưu thay đổi" để đồng bộ.');
+  };
+
+  const handleSetCoverImage = (index) => {
+    if (index === 0) return;
+    const target = venueImages[index];
+    const filtered = venueImages.filter((_, i) => i !== index);
+    setVenueImages([target, ...filtered]);
+    toast.success('Đã đặt làm ảnh bìa chính (Cover)!');
+  };
+
+  const handleStartEditImage = (index) => {
+    setEditingImageIdx(index);
+    setEditingImageUrl(venueImages[index]);
+  };
+
+  const handleSaveEditImage = () => {
+    if (!editingImageUrl.trim()) {
+      toast.error('Đường link ảnh không được để trống.');
+      return;
+    }
+    const updated = [...venueImages];
+    updated[editingImageIdx] = editingImageUrl.trim();
+    setVenueImages(updated);
+    setEditingImageIdx(null);
+    setEditingImageUrl('');
+    toast.success('Đã cập nhật link ảnh thành công!');
   };
 
   const handleRemoveImage = (index) => {
-    setVenueImages(venueImages.filter((_, i) => i !== index));
+    askConfirm({
+      title: 'Xác nhận Xóa Ảnh',
+      message: 'Bạn có chắc chắn muốn xóa ảnh này khỏi thư viện hiển thị của cụm sân?',
+      confirmText: 'Xóa ảnh này',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: () => {
+        setVenueImages(venueImages.filter((_, i) => i !== index));
+        toast.success('Đã xóa ảnh khỏi danh sách!');
+      },
+    });
   };
 
   const handleAddRule = () => {
-    if (!newRuleText.trim()) return;
+    if (!newRuleText.trim()) {
+      toast.error('Vui lòng nhập nội dung điều khoản / quy định.');
+      return;
+    }
     setVenueRules([...venueRules, newRuleText.trim()]);
     setNewRuleText('');
+    toast.success('Đã thêm quy định mới! Bấm "Lưu thay đổi" để đồng bộ.');
+  };
+
+  const handleStartEditRule = (index) => {
+    setEditingRuleIdx(index);
+    setEditingRuleContent(venueRules[index]);
+  };
+
+  const handleSaveEditRule = () => {
+    if (!editingRuleContent.trim()) {
+      toast.error('Nội dung điều khoản không được để trống.');
+      return;
+    }
+    const updated = [...venueRules];
+    updated[editingRuleIdx] = editingRuleContent.trim();
+    setVenueRules(updated);
+    setEditingRuleIdx(null);
+    setEditingRuleContent('');
+    toast.success('Đã cập nhật nội dung điều khoản!');
   };
 
   const handleRemoveRule = (index) => {
-    setVenueRules(venueRules.filter((_, i) => i !== index));
+    askConfirm({
+      title: 'Xác nhận Xóa Điều Khoản',
+      message: 'Bạn có chắc chắn muốn xóa điều khoản này khỏi nội quy của cụm sân?',
+      confirmText: 'Xóa điều khoản',
+      confirmColor: 'red',
+      icon: '🗑️',
+      onConfirm: () => {
+        setVenueRules(venueRules.filter((_, i) => i !== index));
+        toast.success('Đã xóa điều khoản!');
+      },
+    });
   };
 
   const handleSaveVenueDetails = async (e) => {
@@ -607,8 +685,8 @@ export default function TenantDashboard() {
     { id: 'PRICING_RULES', label: '💰 Bảng Giá Động', show: true },
     { id: 'POS_INVENTORY', label: '📦 Kho hàng POS', show: tenant.enable_pos_module },
     { id: 'STAFF', label: '👥 Tài khoản Lễ tân', show: true },
-    { id: 'REVIEWS', label: '⭐ Đánh giá của Khách', show: true },
-    { id: 'VENUE_DETAILS', label: '🖼️ Hình ảnh & Điều khoản', show: true },
+    { id: 'REVIEWS', label: '⭐ Xem đánh giá', show: true },
+    { id: 'VENUE_DETAILS', label: '📝 Mô tả', show: true },
     { id: 'ANALYTICS', label: '📊 Báo cáo Doanh thu', show: true },
     { id: 'SETTINGS', label: '⚙️ Cấu hình Cụm sân & VietQR', show: true },
   ];
@@ -641,18 +719,11 @@ export default function TenantDashboard() {
 
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/staff')}
-              className="bg-amber-400 hover:bg-amber-300 text-slate-950 font-black px-4 py-2.5 rounded-xl text-xs transition shadow-sm active:scale-95 flex items-center gap-1.5"
-            >
-              <span>⚡</span>
-              <span>Mở Quầy Lễ Tân & POS →</span>
-            </button>
-            <button
               onClick={() => {
                 logout();
                 navigate('/');
               }}
-              className="bg-white/10 hover:bg-white/20 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition"
+              className="bg-white/10 hover:bg-white/20 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition"
             >
               Đăng xuất
             </button>
@@ -702,175 +773,223 @@ export default function TenantDashboard() {
               </div>
             </div>
 
-            {/* LƯỚI CARD CHỨC NĂNG (GRID NỔI BẬT NHƯ ẢNH 2) */}
+            {/* LƯỚI CARD CHỨC NĂNG (GIAO DIỆN DỊU MẮT, RÕ RÀNG, CHUYÊN NGHIỆP) */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
               {/* CARD 1: QUẢN LÝ SÂN & BẢO TRÌ */}
               <div
                 onClick={() => setTab('COURTS')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-rose-500 via-rose-600 to-orange-500 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-48"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-emerald-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center text-2xl shadow-sm">
                     🏸
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-2.5 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {courts.length} Sân
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-base font-black tracking-tight">Trạng thái & Quản lý Sân</h3>
-                  <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-emerald-700 transition-colors tracking-tight">
+                    Trạng thái & Quản lý Sân
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
                     {courts.filter((c) => c.is_under_maintenance).length > 0
                       ? `Có ${courts.filter((c) => c.is_under_maintenance).length} sân đang bảo trì`
                       : 'Tất cả các sân đang hoạt động tốt'} • Lên lịch bảo trì trước
                   </p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-emerald-600 transition-colors">
+                  <span>Quản lý sân bãi</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 2: BÁN HÀNG TẠI QUẦY & POS */}
               <div
                 onClick={() => navigate('/staff')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-amber-500 via-amber-600 to-yellow-500 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-48"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-amber-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-100 flex items-center justify-center text-2xl shadow-sm">
                     ⚡
                   </div>
-                  <span className="text-[11px] font-black bg-slate-950/30 px-2.5 py-1 rounded-full text-amber-200">
+                  <span className="text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-200/70 px-2.5 py-1 rounded-full">
                     Trực tiếp
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-base font-black tracking-tight">Quầy Lễ Tân & Bán Hàng</h3>
-                  <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-amber-700 transition-colors tracking-tight">
+                    Quầy Lễ Tân & Bán Hàng
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
                     Check-in mã QR, tạo vé vãng lai & xuất hóa đơn đồ uống, cầu lông tại quầy
                   </p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-amber-600 transition-colors">
+                  <span>Mở quầy POS</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 3: QUẢN LÝ KHO POS */}
               <div
                 onClick={() => setTab('POS_INVENTORY')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-pink-600 via-rose-600 to-red-600 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-48"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-blue-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center text-2xl shadow-sm">
                     📦
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-2.5 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {products.length} Mặt hàng
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-base font-black tracking-tight">Kho hàng & Dịch vụ</h3>
-                  <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-blue-700 transition-colors tracking-tight">
+                    Kho hàng & Dịch vụ
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
                     Nước uống, Cầu lông, Quấn cán, Cước, Băng gối, Salonpas & Thuê vợt
                   </p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-blue-600 transition-colors">
+                  <span>Kiểm kê kho</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 4: DOANH THU & BÁO CÁO */}
               <div
                 onClick={() => setTab('ANALYTICS')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-purple-600 via-indigo-600 to-violet-700 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-48"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-purple-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 border border-purple-100 flex items-center justify-center text-2xl shadow-sm">
                     📊
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-2.5 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-purple-50 text-purple-800 border border-purple-200/70 px-2.5 py-1 rounded-full">
                     Trực quan
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-base font-black tracking-tight">Doanh thu & Lợi nhuận</h3>
-                  <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-purple-700 transition-colors tracking-tight">
+                    Doanh thu & Lợi nhuận
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
                     Biểu đồ doanh thu tiền sân, F&B và thống kê khung giờ vàng
                   </p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-purple-600 transition-colors">
+                  <span>Xem báo cáo</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 5: TÀI KHOẢN LỄ TÂN */}
               <div
                 onClick={() => setTab('STAFF')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-cyan-600 via-teal-600 to-emerald-600 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-48"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-teal-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center text-2xl shadow-sm">
                     👥
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-2.5 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {staffList.length} Nhân viên
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-base font-black tracking-tight">Quản lý Lễ tân</h3>
-                  <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-teal-700 transition-colors tracking-tight">
+                    Quản lý Lễ tân
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
                     Thêm, sửa, xóa tài khoản lễ tân & cấp lại mật khẩu bảo mật
                   </p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-teal-600 transition-colors">
+                  <span>Quản lý nhân sự</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
 
               {/* CARD 6: CẤU HÌNH GIÁ ĐỘNG */}
               <div
                 onClick={() => setTab('PRICING_RULES')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-blue-600 via-indigo-600 to-slate-700 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-48"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl shadow-sm">
                     💰
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-2.5 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {pricingRules.length} Khung giờ
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-base font-black tracking-tight">Bảng giá Động</h3>
-                  <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-700 transition-colors tracking-tight">
+                    Bảng giá Động
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
                     Cấu hình giá giờ cao điểm, giờ thấp điểm theo từng loại sân
                   </p>
                 </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-indigo-600 transition-colors">
+                  <span>Cài đặt bảng giá</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
+                </div>
               </div>
 
-              {/* CARD 7: ĐÁNH GIÁ & NHẬN XÉT CỦA KHÁCH */}
+              {/* CARD 7: XEM ĐÁNH GIÁ (ĐỔI TÊN THEO YÊU CẦU) */}
               <div
                 onClick={() => setTab('REVIEWS')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-amber-600 via-orange-600 to-red-600 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-48"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-rose-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
+                  <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-700 border border-rose-100 flex items-center justify-center text-2xl shadow-sm">
                     ⭐
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-2.5 py-1 rounded-full">
+                  <span className="text-[11px] font-black bg-rose-50 text-rose-800 border border-rose-200/70 px-2.5 py-1 rounded-full">
                     {reviewsData.stats?.avg_rating || 5} ★ ({reviewsData.stats?.total_reviews || 0})
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-base font-black tracking-tight">Đánh giá & Nhận xét</h3>
-                  <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-rose-700 transition-colors tracking-tight">
+                    Xem đánh giá
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
                     Xem phản hồi thực tế của khách hàng sau khi hoàn tất đặt sân
                   </p>
                 </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-rose-600 transition-colors">
+                  <span>Đánh giá từ khách</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
+                </div>
               </div>
 
-              {/* CARD 8: QUẢN LÝ ẢNH & ĐIỀU KHOẢN */}
+              {/* CARD 8: MÔ TẢ (ĐỔI TÊN THEO YÊU CẦU) */}
               <div
                 onClick={() => setTab('VENUE_DETAILS')}
-                className="group cursor-pointer rounded-3xl p-6 bg-gradient-to-br from-teal-700 via-cyan-800 to-slate-800 text-white shadow-md hover:shadow-xl hover:-translate-y-1 transition duration-300 flex flex-col justify-between h-48"
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-cyan-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
-                    🖼️
+                  <div className="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-700 border border-cyan-100 flex items-center justify-center text-2xl shadow-sm">
+                    📝
                   </div>
-                  <span className="text-[11px] font-black bg-white/25 px-2.5 py-1 rounded-full">
-                    {venueImages.length} Hình ảnh
+                  <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
+                    {venueImages.length} Ảnh • {venueRules.length} Quy định
                   </span>
                 </div>
                 <div>
-                  <h3 className="text-base font-black tracking-tight">Hình ảnh & Điều khoản</h3>
-                  <p className="text-[11px] text-white/85 mt-1 line-clamp-2">
-                    Thêm bớt ảnh sân, quy định hủy hoàn tiền & nội quy sân đấu
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-cyan-700 transition-colors tracking-tight">
+                    Mô tả
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
+                    Thư viện hình ảnh (xem, sửa, xóa), điều khoản nội quy & giới thiệu cụm sân
                   </p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-cyan-600 transition-colors">
+                  <span>Chỉnh sửa mô tả</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
             </div>
@@ -1309,66 +1428,178 @@ export default function TenantDashboard() {
         )}
 
         {/* ========================================================= */}
-        {/* TAB 7: ĐIỀU KHOẢN, QUY ĐỊNH & THƯ VIỆN HÌNH ẢNH SÂN */}
+        {/* TAB 7: MÔ TẢ CỤM SÂN, THƯ VIỆN ẢNH (CRUD) & NỘI QUY */}
         {/* ========================================================= */}
         {tab === 'VENUE_DETAILS' && (
           <form onSubmit={handleSaveVenueDetails} className="space-y-6">
-            <div>
-              <h2 className="text-xl font-black text-slate-900">Hình ảnh, Điều khoản & Giới thiệu sân</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Chỉnh sửa hình ảnh thư viện hiển thị trên sàn, cập nhật mô tả giới thiệu và danh sách nội quy sân.
-              </p>
+            <div className="flex flex-wrap justify-between items-center gap-4">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Mô Tả Cụm Sân, Thư Viện Hình Ảnh & Nội Quy</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Quản lý đầy đủ thư viện ảnh (xem ảnh lớn, thêm ảnh, sửa link, xóa ảnh), tùy chỉnh danh sách điều khoản và giới thiệu cụm sân.
+                </p>
+              </div>
+              <button
+                type="submit"
+                className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold px-6 py-3 rounded-2xl text-xs transition shadow-md flex items-center gap-2"
+              >
+                <span>💾</span>
+                <span>Lưu Tất Cả Thay Đổi</span>
+              </button>
             </div>
 
-            <div className="grid lg:grid-cols-2 gap-6">
-              {/* QUẢN LÝ THƯ VIỆN ẢNH SÂN */}
+            <div className="grid lg:grid-cols-2 gap-6 items-start">
+              {/* QUẢN LÝ THƯ VIỆN ẢNH SÂN (CRUD ĐẦY ĐỦ) */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-                <h3 className="font-extrabold text-slate-900 text-base">Thư viện Hình ảnh Sân ({venueImages.length})</h3>
-
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    placeholder="Dán link ảnh (https://...)"
-                    value={newImageUrl}
-                    onChange={(e) => setNewImageUrl(e.target.value)}
-                    className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddImage}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm"
-                  >
-                    + Thêm ảnh
-                  </button>
+                <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <div>
+                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                      <span>🖼️</span>
+                      <span>Thư viện Hình ảnh Sân ({venueImages.length})</span>
+                    </h3>
+                    <p className="text-[11px] text-slate-400">Xem ảnh lớn, chỉnh sửa link, chọn ảnh bìa hoặc xóa ảnh</p>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
+                    Ảnh 1 = Ảnh bìa sàn
+                  </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 max-h-96 overflow-y-auto p-1">
-                  {venueImages.map((imgUrl, i) => (
-                    <div key={i} className="relative group rounded-2xl overflow-hidden border border-slate-200 h-32 bg-slate-100 shadow-sm">
-                      <img
-                        src={imgUrl}
-                        alt={`Ảnh sân ${i + 1}`}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.target.src = 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80';
-                        }}
-                      />
+                {/* FORM THÊM ẢNH */}
+                <div className="space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      placeholder="Dán đường link ảnh (https://...)"
+                      value={newImageUrl}
+                      onChange={(e) => setNewImageUrl(e.target.value)}
+                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleAddImage}
+                      className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm whitespace-nowrap"
+                    >
+                      + Thêm ảnh
+                    </button>
+                  </div>
+
+                  {/* GỢI Ý ẢNH MẪU 1 CHẠM */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] font-bold text-slate-400">Gợi ý ảnh đẹp:</span>
+                    {[
+                      { label: 'Thảm BWF Chuẩn', url: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=1200&q=80' },
+                      { label: 'Đèn Thi Đấu', url: 'https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?auto=format&fit=crop&w=1200&q=80' },
+                      { label: 'Sân Thi Đấu VIP', url: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=80' },
+                    ].map((p, idx) => (
                       <button
+                        key={idx}
                         type="button"
-                        onClick={() => handleRemoveImage(i)}
-                        className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white w-6 h-6 rounded-full flex items-center justify-center text-xs font-black shadow-md opacity-0 group-hover:opacity-100 transition"
-                        title="Xóa ảnh này"
+                        onClick={() => {
+                          setVenueImages([...venueImages, p.url]);
+                          toast.success(`Đã thêm ảnh "${p.label}"!`);
+                        }}
+                        className="text-[10px] font-bold bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-200 transition"
                       >
-                        ✕
+                        + {p.label}
                       </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* DANH SÁCH ẢNH DẠNG GRID CRUD */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto p-1">
+                  {venueImages.map((imgUrl, i) => (
+                    <div
+                      key={i}
+                      className="group rounded-2xl overflow-hidden border border-slate-200/90 bg-slate-50 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-emerald-300 transition"
+                    >
+                      <div className="relative h-32 overflow-hidden bg-slate-900 cursor-pointer" onClick={() => setPreviewModalImage(imgUrl)}>
+                        <img
+                          src={imgUrl}
+                          alt={`Ảnh sân ${i + 1}`}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          onError={(e) => {
+                            e.target.src = 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80';
+                          }}
+                        />
+                        <div className="absolute top-2 left-2 flex items-center gap-1.5">
+                          {i === 0 ? (
+                            <span className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-md">
+                              ★ Ảnh bìa (Cover)
+                            </span>
+                          ) : (
+                            <span className="bg-slate-900/80 backdrop-blur text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow">
+                              Ảnh #{i + 1}
+                            </span>
+                          )}
+                        </div>
+                        <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                          <span className="bg-white/90 backdrop-blur text-slate-900 text-xs font-black px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1.5">
+                            <span>🔍</span>
+                            <span>Xem ảnh lớn</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* THẺ ĐIỀU KHIỂN CRUD DƯỚI MỖI ẢNH */}
+                      <div className="p-2.5 bg-white border-t border-slate-100 flex items-center justify-between gap-1 text-[11px] font-bold">
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setPreviewModalImage(imgUrl)}
+                            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 p-1.5 rounded-lg transition"
+                            title="Phóng to ảnh"
+                          >
+                            👁️ Xem
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditImage(i)}
+                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded-lg transition"
+                            title="Sửa đường link ảnh"
+                          >
+                            ✏️ Sửa
+                          </button>
+                          {i !== 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleSetCoverImage(i)}
+                              className="text-amber-600 hover:text-amber-800 hover:bg-amber-50 p-1.5 rounded-lg transition"
+                              title="Đưa lên làm ảnh bìa chính"
+                            >
+                              ⭐ Làm bìa
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(i)}
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-lg transition"
+                          title="Xóa ảnh này"
+                        >
+                          🗑️ Xóa
+                        </button>
+                      </div>
                     </div>
                   ))}
+                  {venueImages.length === 0 && (
+                    <div className="col-span-2 text-center py-12 text-slate-400 text-xs border border-dashed rounded-2xl">
+                      Chưa có hình ảnh nào. Hãy dán liên kết ảnh ở trên để thêm vào thư viện.
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {/* QUẢN LÝ ĐIỀU KHOẢN & NỘI QUY */}
+              {/* QUẢN LÝ ĐIỀU KHOẢN, NỘI QUY & MÔ TẢ SÂN */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-                <h3 className="font-extrabold text-slate-900 text-base">Nội quy & Điều khoản sân</h3>
+                <div className="pb-2 border-b border-slate-100">
+                  <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
+                    <span>📋</span>
+                    <span>Nội quy & Điều khoản sân ({venueRules.length})</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-400">Hiển thị toàn bộ các nội quy sẵn có, chỉnh sửa trực tiếp hoặc thêm bớt</p>
+                </div>
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Mô tả giới thiệu cụm sân</label>
@@ -1376,57 +1607,153 @@ export default function TenantDashboard() {
                     rows={3}
                     value={venueDescription}
                     onChange={(e) => setVenueDescription(e.target.value)}
-                    placeholder="Giới thiệu về cơ sở vật chất, hệ thống thảm, quạt làm mát..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs leading-relaxed"
+                    placeholder="Giới thiệu về cơ sở vật chất, hệ thống thảm, quạt làm mát, phòng thay đồ..."
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs leading-relaxed focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Thêm điều khoản / nội quy mới</label>
+                {/* FORM THÊM ĐIỀU KHOẢN MỚI */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-700">Thêm quy định / điều khoản mới</label>
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="VD: Không mang đồ ăn có mùi vào khu vực thảm"
+                      placeholder="VD: Không mang đồ ăn có mùi hoặc bã kẹo cao su vào sân đấu..."
                       value={newRuleText}
                       onChange={(e) => setNewRuleText(e.target.value)}
-                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs"
+                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                     <button
                       type="button"
                       onClick={handleAddRule}
-                      className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm"
+                      className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm whitespace-nowrap"
                     >
                       + Thêm
                     </button>
                   </div>
+
+                  {/* GỢI Ý ĐIỀU KHOẢN TIÊU CHUẨN */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <span className="text-[10px] font-bold text-slate-400">Thêm nhanh:</span>
+                    {[
+                      'Mang giày thể thao chuyên dụng (đế không để vệt đen)',
+                      'Có mặt trước 10 phút làm thủ tục Check-in',
+                      'Hủy trước 24h hoàn tiền 100% tự động',
+                      'Tự bảo quản đồ dùng cá nhân có giá trị'
+                    ].map((sampleRule, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => {
+                          if (!venueRules.includes(sampleRule)) {
+                            setVenueRules([...venueRules, sampleRule]);
+                            toast.success('Đã thêm quy định mẫu!');
+                          }
+                        }}
+                        className="text-[10px] font-bold bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 px-2 py-0.5 rounded-lg border border-slate-200 transition"
+                      >
+                        + {sampleRule.slice(0, 26)}...
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
-                <div className="space-y-2 max-h-60 overflow-y-auto">
+                {/* DANH SÁCH TẤT CẢ NỘI QUY SẴN CÓ VỚI INLINE EDIT */}
+                <div className="space-y-2 max-h-80 overflow-y-auto p-1">
+                  <div className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
+                    Toàn bộ điều khoản hiện có (Bấm ✏️ để sửa câu chữ):
+                  </div>
                   {venueRules.map((r, i) => (
                     <div
                       key={i}
-                      className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex justify-between items-center gap-2"
+                      className={`p-3 rounded-2xl border text-xs transition ${
+                        editingRuleIdx === i
+                          ? 'bg-amber-50/70 border-amber-300 ring-2 ring-amber-400/20'
+                          : 'bg-slate-50/80 border-slate-200 hover:bg-white hover:border-slate-300'
+                      }`}
                     >
-                      <span className="text-slate-700 font-medium">{r}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveRule(i)}
-                        className="text-red-500 hover:text-red-700 font-bold"
-                        title="Xóa quy định này"
-                      >
-                        ✕
-                      </button>
+                      {editingRuleIdx === i ? (
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-amber-800">
+                              Đang chỉnh sửa Quy định #{i + 1}:
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setEditingRuleIdx(null)}
+                              className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+                            >
+                              ✕ Hủy
+                            </button>
+                          </div>
+                          <textarea
+                            rows={2}
+                            value={editingRuleContent}
+                            onChange={(e) => setEditingRuleContent(e.target.value)}
+                            className="w-full p-2.5 bg-white border border-amber-300 rounded-xl text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setEditingRuleIdx(null)}
+                              className="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 font-bold text-[11px]"
+                            >
+                              Hủy bỏ
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleSaveEditRule}
+                              className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-sm"
+                            >
+                              ✓ Lưu sửa
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex justify-between items-start gap-3">
+                          <div className="flex items-start gap-2.5">
+                            <span className="w-5 h-5 rounded-full bg-slate-200 text-slate-700 font-black text-[10px] flex items-center justify-center shrink-0 mt-0.5">
+                              {i + 1}
+                            </span>
+                            <span className="text-slate-700 font-medium leading-relaxed">{r}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditRule(i)}
+                              className="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg font-bold text-[11px] transition"
+                              title="Sửa nội dung"
+                            >
+                              ✏️ Sửa
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveRule(i)}
+                              className="text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg font-bold text-[11px] transition"
+                              title="Xóa điều khoản này"
+                            >
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
+                  {venueRules.length === 0 && (
+                    <div className="text-center py-8 text-slate-400 text-xs">
+                      Chưa có quy định nào. Bạn có thể thêm nội quy mới ở ô phía trên.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
 
             <button
               type="submit"
-              className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-3.5 rounded-xl text-sm transition shadow-sm"
+              className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold py-3.5 rounded-2xl text-sm transition shadow-md"
             >
-              💾 Lưu Thay Đổi Điều Khoản, Nội Quy & Thư Viện Ảnh Sân
+              💾 Lưu Toàn Bộ Mô Tả, Nội Quy & Thư Viện Ảnh Lên Hệ Thống
             </button>
           </form>
         )}
@@ -2364,6 +2691,122 @@ export default function TenantDashboard() {
                 }`}
               >
                 {confirmModal.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 8: XEM ẢNH PHÓNG TO (LIGHTBOX PREVIEW) */}
+      {/* ========================================================= */}
+      {previewModalImage && (
+        <div
+          onClick={() => setPreviewModalImage(null)}
+          className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4 z-[9999]"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl relative flex flex-col max-h-[90vh]"
+          >
+            <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🖼️</span>
+                <span className="font-black text-sm text-slate-900">Xem ảnh chi tiết</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPreviewModalImage(null)}
+                className="w-8 h-8 rounded-full bg-slate-200 hover:bg-slate-300 text-slate-700 font-black flex items-center justify-center text-sm transition"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="p-4 bg-slate-900 flex items-center justify-center overflow-auto flex-1">
+              <img
+                src={previewModalImage}
+                alt="Phóng to ảnh sân"
+                className="max-h-[70vh] w-auto object-contain rounded-xl shadow-lg"
+              />
+            </div>
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+              <span className="truncate max-w-md font-mono text-[11px]">{previewModalImage}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(previewModalImage);
+                  toast.success('Đã sao chép link ảnh!');
+                }}
+                className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg font-bold text-xs hover:bg-emerald-100 transition whitespace-nowrap"
+              >
+                Sao chép liên kết
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL 9: SỬA ĐƯỜNG LINK ẢNH (IMAGE URL EDIT) */}
+      {/* ========================================================= */}
+      {editingImageIdx !== null && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center text-xl font-black">
+                ✏️
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-900 text-base">
+                  Chỉnh sửa link Ảnh #{editingImageIdx + 1}
+                </h3>
+                <p className="text-[11px] text-slate-400">Thay đổi đường dẫn hình ảnh hiển thị trên sàn</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Đường link ảnh mới (https://...)</label>
+                <input
+                  type="url"
+                  required
+                  value={editingImageUrl}
+                  onChange={(e) => setEditingImageUrl(e.target.value)}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+
+              {editingImageUrl && (
+                <div className="rounded-xl overflow-hidden border border-slate-200 h-36 bg-slate-100">
+                  <img
+                    src={editingImageUrl}
+                    alt="Xem trước ảnh"
+                    className="w-full h-full object-cover"
+                    onError={(e) => {
+                      e.target.src = 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80';
+                    }}
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingImageIdx(null);
+                  setEditingImageUrl('');
+                }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-xs text-slate-600 hover:bg-slate-100 transition"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEditImage}
+                className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm"
+              >
+                ✓ Lưu thay đổi
               </button>
             </div>
           </div>
