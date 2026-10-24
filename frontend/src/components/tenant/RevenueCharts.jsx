@@ -1,7 +1,49 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
+import axiosClient from '../../api/axiosClient';
+import { exportTenantRevenueToExcel, exportTenantRevenueToCSV } from '../../utils/excelExport';
 
 export default function RevenueCharts({ analytics }) {
   const [hoveredDay, setHoveredDay] = useState(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    const toastId = toast.loading('Đang trích xuất sổ cái doanh thu & giao dịch...');
+    try {
+      const res = await axiosClient.get('/tenant/revenue-export');
+      if (res.data?.success && res.data?.exportData) {
+        exportTenantRevenueToExcel(res.data.exportData);
+        toast.success('Đã xuất file Excel (.xlsx) thành công!', { id: toastId });
+      } else {
+        toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Lỗi khi xuất file Excel. Vui lòng thử lại.', { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setIsExporting(true);
+    const toastId = toast.loading('Đang chuẩn bị file CSV...');
+    try {
+      const res = await axiosClient.get('/tenant/revenue-export');
+      if (res.data?.success && res.data?.exportData) {
+        exportTenantRevenueToCSV(res.data.exportData);
+        toast.success('Đã xuất file CSV thành công!', { id: toastId });
+      } else {
+        toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Lỗi khi xuất file CSV. Vui lòng thử lại.', { id: toastId });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (!analytics || !analytics.chartData) return null;
 
@@ -22,7 +64,49 @@ export default function RevenueCharts({ analytics }) {
 
   return (
     <div className="space-y-6">
-      
+
+      {/* THANH ĐIỀU HƯỚNG & XUẤT BÁO CÁO KẾ TOÁN (EXCEL / CSV) */}
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/90 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black text-sm border border-emerald-100">
+              📊
+            </span>
+            <h2 className="text-base font-extrabold text-slate-900">Báo Cáo Doanh Thu & Quyết Toán Sân</h2>
+            <span className="hidden sm:inline-flex bg-emerald-100/70 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-200">
+              Kế toán đối soát
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Tổng hợp dòng tiền thuê sân, hóa đơn bán hàng POS và khấu trừ HSSV phục vụ quyết toán thuế cuối tháng
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            disabled={isExporting}
+            onClick={handleExportExcel}
+            className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-sm hover:shadow flex items-center gap-2 disabled:opacity-50"
+            title="Xuất file Excel (.xlsx) gồm 3 Sheets: Tổng hợp, Sổ cái đặt sân, Hóa đơn POS"
+          >
+            <span className="text-sm">📗</span>
+            <span>{isExporting ? 'Đang trích xuất...' : 'Xuất Báo Cáo Excel (.xlsx)'}</span>
+          </button>
+
+          <button
+            type="button"
+            disabled={isExporting}
+            onClick={handleExportCSV}
+            className="px-3.5 py-2.5 bg-slate-50 hover:bg-slate-100 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition border border-slate-200/80 flex items-center gap-1.5 disabled:opacity-50"
+            title="Xuất file CSV chuẩn UTF-8 (Excel không lỗi font)"
+          >
+            <span>📄</span>
+            <span>Xuất CSV</span>
+          </button>
+        </div>
+      </div>
+
       {/* 1. HÀNG THỐNG KÊ TỔNG QUAN (KPI CARDS) */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">

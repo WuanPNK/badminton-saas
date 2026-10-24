@@ -146,4 +146,12 @@ router.put(
   tenantController.updateVenueDetails
 );
 
+router.get(
+  '/revenue-export',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  verifyActiveTenant,
+  tenantController.getTenantRevenueExport
+);
+
 module.exports = router;

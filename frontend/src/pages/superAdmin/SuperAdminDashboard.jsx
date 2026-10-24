@@ -5,6 +5,7 @@ import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 import SaasRevenueCharts from '../../components/superAdmin/SaasRevenueCharts';
 import ExpandableAddButton from '../../components/common/ExpandableAddButton';
+import { exportSuperAdminRevenueToExcel, exportSuperAdminRevenueToCSV } from '../../utils/excelExport';
 
 export default function SuperAdminDashboard() {
   const { user, logout } = useAuth();
@@ -12,6 +13,46 @@ export default function SuperAdminDashboard() {
 
   // Mặc định đăng nhập vào sẽ mở HUB / BẢNG ĐIỀU KHIỂN TRUNG TÂM
   const [tab, setTab] = useState('HUB');
+
+  const [isExportingSaas, setIsExportingSaas] = useState(false);
+
+  const handleExportSaasExcel = async () => {
+    setIsExportingSaas(true);
+    const toastId = toast.loading('Đang trích xuất toàn bộ sổ cái hợp đồng SaaS...');
+    try {
+      const res = await axiosClient.get('/super-admin/revenue-export');
+      if (res.data?.success && res.data?.exportData) {
+        exportSuperAdminRevenueToExcel(res.data.exportData);
+        toast.success('Đã xuất file Excel SaaS (.xlsx) thành công!', { id: toastId });
+      } else {
+        toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Lỗi khi xuất file Excel. Vui lòng thử lại.', { id: toastId });
+    } finally {
+      setIsExportingSaas(false);
+    }
+  };
+
+  const handleExportSaasCSV = async () => {
+    setIsExportingSaas(true);
+    const toastId = toast.loading('Đang chuẩn bị file CSV...');
+    try {
+      const res = await axiosClient.get('/super-admin/revenue-export');
+      if (res.data?.success && res.data?.exportData) {
+        exportSuperAdminRevenueToCSV(res.data.exportData);
+        toast.success('Đã xuất file CSV thành công!', { id: toastId });
+      } else {
+        toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Lỗi khi xuất file CSV. Vui lòng thử lại.', { id: toastId });
+    } finally {
+      setIsExportingSaas(false);
+    }
+  };
 
   // Dữ liệu phê duyệt & Báo cáo
   const [approvals, setApprovals] = useState({
@@ -1142,7 +1183,7 @@ export default function SuperAdminDashboard() {
         {/* ========================================================= */}
         {tab === 'REVENUE' && (
           <div className="space-y-6">
-            <div className="flex justify-between items-center">
+            <div className="flex flex-wrap justify-between items-center gap-3">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
                   Báo Cáo Doanh Thu Nền Tảng & Biểu Đồ Trực Quan
@@ -1152,14 +1193,27 @@ export default function SuperAdminDashboard() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => openAssignModal()}
-                className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
-              >
-                <span>+</span>
-                <span>Ghi nhận Doanh thu SaaS</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={isExportingSaas}
+                  onClick={handleExportSaasExcel}
+                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5 disabled:opacity-50"
+                  title="Xuất sổ cái hợp đồng & tài chính SaaS ra file Excel (.xlsx)"
+                >
+                  <span className="text-sm">📗</span>
+                  <span>{isExportingSaas ? 'Đang trích xuất...' : 'Xuất Báo Cáo Excel'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openAssignModal()}
+                  className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
+                >
+                  <span>+</span>
+                  <span>Ghi nhận Doanh thu SaaS</span>
+                </button>
+              </div>
             </div>
 
             {/* RENDER BIỂU ĐỒ TRỰC QUAN CHUYÊN BIỆT */}

@@ -18,6 +18,7 @@ router.put('/plans/:id', superAdminController.updatePlan);
 router.delete('/plans/:id', superAdminController.deletePlan);
 
 router.get('/dashboard', superAdminController.getPlatformDashboard);
+router.get('/revenue-export', superAdminController.getSuperAdminRevenueExport);
 router.post('/subscriptions/record', superAdminController.recordTenantSubscription);
 
 module.exports = router;

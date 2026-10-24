@@ -519,4 +519,110 @@ exports.recordTenantSubscription = async (req, res) => {
     console.error(error);
     res.status(500).json({ message: 'Lỗi khi ghi nhận hợp đồng phần mềm.' });
   }
+};
+
+// 7. Xuất Dữ Liệu Doanh Thu SaaS Nền Tảng Cho Kế Toán Super Admin (Excel / CSV)
+exports.getSuperAdminRevenueExport = async (req, res) => {
+  try {
+    // 7.1. Tổng quan các chỉ số tài chính SaaS
+    const revenueRes = await db.query(
+      `SELECT COALESCE(SUM(amount_paid), 0) AS total_saas_revenue,
+              COUNT(id) AS total_subscriptions,
+              COALESCE(AVG(amount_paid), 0) AS average_deal
+       FROM tenant_subscriptions
+       WHERE payment_status = 'PAID'`
+    );
+
+    const thisMonthRes = await db.query(
+      `SELECT COALESCE(SUM(amount_paid), 0) AS this_month_revenue,
+              COUNT(id) AS this_month_subscriptions
+       FROM tenant_subscriptions
+       WHERE payment_status = 'PAID'
+         AND created_at >= date_trunc('month', CURRENT_DATE)`
+    );
+
+    // 7.2. Toàn bộ sổ cái hợp đồng thuê SaaS (All Subscriptions Ledger)
+    const subscriptionsRes = await db.query(
+      `SELECT ts.id, ts.amount_paid, ts.start_date, ts.end_date, ts.payment_status, ts.created_at,
+              t.name AS tenant_name, t.district, t.address, t.phone_contact,
+              u.full_name AS owner_name, u.email AS owner_email,
+              sp.name AS plan_name, sp.badge, sp.max_courts
+       FROM tenant_subscriptions ts
+       JOIN tenants t ON ts.tenant_id = t.id
+       LEFT JOIN users u ON t.owner_id = u.id
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       ORDER BY ts.created_at DESC`
+    );
+
+    // 7.3. Phân bổ doanh thu theo gói cước
+    const planBreakdown = await db.query(
+      `SELECT sp.name AS plan_name,
+              sp.badge,
+              COALESCE(SUM(ts.amount_paid), 0) AS total_amount,
+              COUNT(ts.id) AS sub_count
+       FROM subscription_plans sp
+       LEFT JOIN tenant_subscriptions ts ON sp.id = ts.plan_id AND ts.payment_status = 'PAID'
+       GROUP BY sp.id, sp.name, sp.badge
+       ORDER BY total_amount DESC`
+    );
+
+    // 7.4. Xếp hạng đóng góp của các cụm sân
+    const tenantRanking = await db.query(
+      `SELECT t.id, t.name AS tenant_name, t.district, t.address,
+              COALESCE(SUM(ts.amount_paid), 0) AS total_paid,
+              COUNT(ts.id) AS subscription_count,
+              MAX(ts.end_date) AS latest_expiry
+       FROM tenants t
+       LEFT JOIN tenant_subscriptions ts ON t.id = ts.tenant_id AND ts.payment_status = 'PAID'
+       GROUP BY t.id, t.name, t.district, t.address
+       ORDER BY total_paid DESC`
+    );
+
+    // 7.5. Doanh thu theo từng tháng (12 tháng gần nhất)
+    const monthlyDb = await db.query(
+      `SELECT to_char(created_at, 'YYYY-MM') AS month_key,
+              to_char(created_at, 'TMMonth YYYY') AS month_label,
+              COALESCE(SUM(amount_paid), 0) AS total_revenue,
+              COUNT(id) AS sub_count
+       FROM tenant_subscriptions
+       WHERE payment_status = 'PAID'
+       GROUP BY month_key, month_label
+       ORDER BY month_key DESC`
+    );
+
+    res.json({
+      success: true,
+      exportData: {
+        exportedAt: new Date().toISOString(),
+        platformName: 'Badminton SaaS Multi-Tenant Platform',
+        summary: {
+          total_saas_revenue: Number(revenueRes.rows[0]?.total_saas_revenue || 0),
+          total_subscriptions: Number(revenueRes.rows[0]?.total_subscriptions || 0),
+          average_deal: Number(revenueRes.rows[0]?.average_deal || 0),
+          this_month_revenue: Number(thisMonthRes.rows[0]?.this_month_revenue || 0),
+          this_month_subscriptions: Number(thisMonthRes.rows[0]?.this_month_subscriptions || 0),
+        },
+        subscriptions: subscriptionsRes.rows,
+        planDistribution: planBreakdown.rows.map((p) => ({
+          plan_name: p.plan_name,
+          badge: p.badge,
+          total_amount: Number(p.total_amount || 0),
+          sub_count: Number(p.sub_count || 0),
+        })),
+        tenantRanking: tenantRanking.rows.map((t) => ({
+          ...t,
+          total_paid: Number(t.total_paid || 0),
+          subscription_count: Number(t.subscription_count || 0),
+        })),
+        monthlyRevenue: monthlyDb.rows.map((m) => ({
+          ...m,
+          total_revenue: Number(m.total_revenue || 0),
+          sub_count: Number(m.sub_count || 0),
+        })),
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi trích xuất báo cáo doanh thu SaaS Super Admin.' });
+  }
 };

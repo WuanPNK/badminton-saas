@@ -641,3 +641,143 @@ exports.updateVenueDetails = async (req, res) => {
     res.status(500).json({ message: 'Lỗi khi cập nhật thông tin cụm sân.' });
   }
 };
+
+// 16. Xuất Dữ Liệu Báo Cáo Doanh Thu Phục Vụ Kế Toán Đối Soát (Excel / CSV)
+exports.getTenantRevenueExport = async (req, res) => {
+  const tenantId = req.tenant.id;
+
+  try {
+    // 16.1. Thông tin Cụm sân
+    const tenantRes = await db.query(
+      `SELECT t.id, t.name, t.district, t.address, t.phone_contact,
+              t.qr_bank_name, t.qr_account_number, t.qr_account_name,
+              t.enable_vip_courts, t.enable_pos_module, t.enable_advanced_analytics,
+              u.full_name AS owner_name, u.email AS owner_email
+       FROM tenants t
+       LEFT JOIN users u ON t.owner_id = u.id
+       WHERE t.id = $1`,
+      [tenantId]
+    );
+
+    // 16.2. Thống kê tổng hợp doanh thu
+    const bookingStats = await db.query(
+      `SELECT
+         COALESCE(SUM(final_price) FILTER (WHERE status IN ('CONFIRMED', 'COMPLETED')), 0) AS court_revenue,
+         COUNT(id) FILTER (WHERE status IN ('CONFIRMED', 'COMPLETED')) AS paid_bookings_count,
+         COUNT(id) FILTER (WHERE status = 'PENDING_REFUND') AS pending_refund_count,
+         COALESCE(SUM(final_price) FILTER (WHERE status = 'REFUNDED'), 0) AS total_refunded_amount
+       FROM bookings
+       WHERE tenant_id = $1`,
+      [tenantId]
+    );
+
+    const posStats = await db.query(
+      `SELECT
+         COALESCE(SUM(total_amount), 0) AS pos_revenue,
+         COUNT(id) AS total_pos_orders
+       FROM pos_orders
+       WHERE tenant_id = $1`,
+      [tenantId]
+    );
+
+    // 16.3. Chi tiết toàn bộ đơn đặt sân (Bookings Ledger)
+    const bookingsRes = await db.query(
+      `SELECT
+         b.id,
+         b.booking_code,
+         b.booking_type,
+         b.booking_date,
+         b.start_time,
+         b.end_time,
+         b.original_price,
+         b.discount_applied,
+         b.final_price,
+         b.is_student_applied,
+         b.status,
+         b.created_at,
+         b.checked_in_at,
+         c.name AS court_name,
+         c.type AS court_type,
+         COALESCE(u.full_name, b.walk_in_guest_name, 'Khách vãng lai') AS customer_name,
+         COALESCE(u.phone, b.walk_in_guest_phone, '') AS customer_phone,
+         u.email AS customer_email,
+         staff.full_name AS staff_name
+       FROM bookings b
+       JOIN courts c ON b.court_id = c.id
+       LEFT JOIN users u ON b.user_id = u.id
+       LEFT JOIN users staff ON b.created_by_staff_id = staff.id
+       WHERE b.tenant_id = $1
+       ORDER BY b.start_time DESC`,
+      [tenantId]
+    );
+
+    // 16.4. Chi tiết toàn bộ hóa đơn POS (POS Orders Ledger)
+    const posOrdersRes = await db.query(
+      `SELECT
+         po.id,
+         po.total_amount,
+         po.payment_method,
+         po.note,
+         po.created_at,
+         u.full_name AS staff_name,
+         c.name AS court_name,
+         b.booking_code,
+         COALESCE(
+           (SELECT string_agg(p.name || ' (x' || poi.quantity || ')', '; ')
+            FROM pos_order_items poi
+            JOIN products p ON poi.product_id = p.id
+            WHERE poi.order_id = po.id),
+           'Hóa đơn dịch vụ'
+         ) AS items_detail
+       FROM pos_orders po
+       JOIN users u ON po.staff_id = u.id
+       LEFT JOIN courts c ON po.court_id = c.id
+       LEFT JOIN bookings b ON po.booking_id = b.id
+       WHERE po.tenant_id = $1
+       ORDER BY po.created_at DESC`,
+      [tenantId]
+    );
+
+    // 16.5. Hiệu suất khai thác theo sân (Revenue by Court)
+    const courtPerformanceRes = await db.query(
+      `SELECT
+         c.name AS court_name,
+         c.type AS court_type,
+         COUNT(b.id) FILTER (WHERE b.status IN ('CONFIRMED', 'COMPLETED')) AS total_bookings,
+         COALESCE(SUM(b.final_price) FILTER (WHERE b.status IN ('CONFIRMED', 'COMPLETED')), 0) AS total_revenue
+       FROM courts c
+       LEFT JOIN bookings b ON c.id = b.court_id
+       WHERE c.tenant_id = $1
+       GROUP BY c.id, c.name, c.type
+       ORDER BY total_revenue DESC`,
+      [tenantId]
+    );
+
+    const courtRev = Number(bookingStats.rows[0].court_revenue);
+    const posRev = Number(posStats.rows[0].pos_revenue);
+    const totalRev = courtRev + posRev;
+
+    res.json({
+      success: true,
+      exportData: {
+        exportedAt: new Date().toISOString(),
+        tenant: tenantRes.rows[0] || {},
+        summary: {
+          totalRevenue: totalRev,
+          courtRevenue: courtRev,
+          posRevenue: posRev,
+          paidBookingsCount: Number(bookingStats.rows[0].paid_bookings_count),
+          posOrdersCount: Number(posStats.rows[0].total_pos_orders),
+          pendingRefundCount: Number(bookingStats.rows[0].pending_refund_count),
+          totalRefundedAmount: Number(bookingStats.rows[0].total_refunded_amount),
+        },
+        bookings: bookingsRes.rows,
+        posOrders: posOrdersRes.rows,
+        courtPerformance: courtPerformanceRes.rows,
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Lỗi khi trích xuất dữ liệu báo cáo kế toán.' });
+  }
+};
