@@ -10,11 +10,23 @@ export default function AuthPage() {
   });
   const [showRegisterPopup, setShowRegisterPopup] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
   const { user, login } = useAuth();
   const navigate = useNavigate();
+
+  // Bộ đếm ngược 60 giây cho việc gửi lại mã OTP
+  useEffect(() => {
+    let timer;
+    if (otpCountdown > 0) {
+      timer = setInterval(() => {
+        setOtpCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [otpCountdown]);
 
   // Bắt tham số URL nếu phiên đăng nhập hết hạn (từ axios interceptor)
   useEffect(() => {
@@ -88,6 +100,7 @@ export default function AuthPage() {
     setMode(newMode);
     setShowRegisterPopup(false);
     setOtpSent(false);
+    setOtpCountdown(0);
     setMessage({ type: '', text: '' });
     setForm((prev) => ({
       ...prev,
@@ -97,10 +110,10 @@ export default function AuthPage() {
     }));
   };
 
-  // Gửi OTP (Dùng cho cả Đăng ký và Quên mật khẩu)
+  // Gửi OTP (Dùng cho cả Đăng ký và Quên mật khẩu - duy nhất 1 email tài khoản)
   const handleSendOtp = async (e) => {
     e.preventDefault();
-    if (!form.email) {
+    if (!form.email || !form.email.trim()) {
       return setMessage({ type: 'error', text: 'Vui lòng nhập địa chỉ Email để nhận mã OTP.' });
     }
     setLoading(true);
@@ -108,10 +121,11 @@ export default function AuthPage() {
     try {
       const purpose = mode === 'FORGOT_PASSWORD' ? 'RESET_PASSWORD' : 'REGISTER';
       const res = await axiosClient.post('/auth/send-otp', {
-        email: form.email,
+        email: form.email.trim(),
         purpose,
       });
       setOtpSent(true);
+      setOtpCountdown(60); // Bắt đầu đếm ngược 60s
       setMessage({ type: 'success', text: res.data.message });
     } catch (err) {
       setMessage({
@@ -687,10 +701,16 @@ export default function AuthPage() {
                 <button
                   type="button"
                   onClick={handleSendOtp}
-                  disabled={loading}
-                  className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition"
+                  disabled={loading || otpCountdown > 0}
+                  className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center justify-center min-w-[110px]"
                 >
-                  {otpSent ? 'Gửi lại OTP' : 'Nhận mã OTP'}
+                  {loading
+                    ? 'Đang gửi...'
+                    : otpCountdown > 0
+                    ? `Gửi lại (${otpCountdown}s)`
+                    : otpSent
+                    ? 'Gửi lại mã OTP'
+                    : 'Nhận mã OTP'}
                 </button>
               </div>
             </div>
@@ -725,10 +745,16 @@ export default function AuthPage() {
                 <button
                   type="button"
                   onClick={handleSendOtp}
-                  disabled={loading}
-                  className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-400 text-white px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition"
+                  disabled={loading || otpCountdown > 0}
+                  className="bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition flex items-center justify-center min-w-[110px]"
                 >
-                  {otpSent ? 'Gửi lại OTP' : 'Gửi mã OTP'}
+                  {loading
+                    ? 'Đang gửi...'
+                    : otpCountdown > 0
+                    ? `Gửi lại (${otpCountdown}s)`
+                    : otpSent
+                    ? 'Gửi lại mã OTP'
+                    : 'Gửi mã OTP'}
                 </button>
               </div>
             </div>

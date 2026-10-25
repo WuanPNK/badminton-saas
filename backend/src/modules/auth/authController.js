@@ -28,33 +28,53 @@ const saveBase64Image = (base64Data, req) => {
   return `${req.protocol}://${req.get('host')}/uploads/${fileName}`;
 };
 
-// 1. GỬI MÃ OTP VỀ EMAIL
+// 1. GỬI MÃ OTP VỀ EMAIL (Dùng chung cho Đăng ký và Khôi phục mật khẩu)
 exports.sendOTP = async (req, res) => {
   const { email, purpose } = req.body;
-  if (!email) return res.status(400).json({ message: 'Vui lòng nhập địa chỉ email.' });
+  if (!email || !email.trim()) {
+    return res.status(400).json({ message: 'Vui lòng nhập địa chỉ email.' });
+  }
+
+  const cleanEmail = email.trim().toLowerCase();
+  const validPurpose = purpose === 'RESET_PASSWORD' ? 'RESET_PASSWORD' : 'REGISTER';
 
   try {
-    if (purpose === 'RESET_PASSWORD') {
-      const userCheck = await db.query(`SELECT id FROM users WHERE email = $1`, [email]);
+    if (validPurpose === 'RESET_PASSWORD') {
+      const userCheck = await db.query(`SELECT id FROM users WHERE email = $1`, [cleanEmail]);
       if (userCheck.rows.length === 0) {
         return res.status(404).json({ message: 'Email này chưa được đăng ký trong hệ thống.' });
+      }
+    } else {
+      const userCheck = await db.query(`SELECT id FROM users WHERE email = $1`, [cleanEmail]);
+      if (userCheck.rows.length > 0) {
+        return res.status(400).json({
+          message: 'Email này đã được sử dụng. Vui lòng đăng nhập hoặc chọn Quên mật khẩu.'
+        });
       }
     }
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); 
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 phút hiệu lực
 
     await db.query(
       `INSERT INTO otp_verifications (email, otp_code, purpose, expires_at)
        VALUES ($1, $2, $3, $4)`,
-      [email, otpCode, purpose || 'REGISTER', expiresAt]
+      [cleanEmail, otpCode, validPurpose, expiresAt]
     );
 
-    await sendOTPEmail(email, otpCode);
-    res.json({ success: true, message: 'Mã OTP 6 số đã được gửi về Gmail của bạn.' });
+    await sendOTPEmail(cleanEmail, otpCode, validPurpose);
+
+    res.json({
+      success: true,
+      message: `Mã OTP 6 số đã được gửi đến hộp thư ${cleanEmail}. Vui lòng kiểm tra hộp thư đến (hoặc hòm thư Rác/Spam).`,
+    });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Lỗi khi gửi email OTP.' });
+    console.error('Lỗi khi gửi email OTP:', error.message || error);
+    let errMsg = 'Không thể gửi email OTP. Vui lòng kiểm tra lại dịch vụ email.';
+    if (error.code === 'EAUTH' || (error.message && error.message.includes('535'))) {
+      errMsg = 'Lỗi xác thực Gmail: Cấu hình EMAIL_USER hoặc EMAIL_PASS (Mật khẩu ứng dụng 16 số) trong backend/.env chưa chính xác.';
+    }
+    res.status(500).json({ message: errMsg });
   }
 };
 
@@ -67,12 +87,15 @@ exports.register = async (req, res) => {
     bankName, bankAccountNumber, bankAccountName
   } = req.body;
 
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const cleanOtp = String(otpCode || '').trim();
+
   try {
     const otpRes = await db.query(
       `SELECT * FROM otp_verifications 
        WHERE email = $1 AND otp_code = $2 AND is_used = FALSE AND expires_at > NOW()
        ORDER BY created_at DESC LIMIT 1`,
-      [email, otpCode]
+      [cleanEmail, cleanOtp]
     );
 
     if (otpRes.rows.length === 0) {
@@ -81,7 +104,7 @@ exports.register = async (req, res) => {
 
     await db.query(`UPDATE otp_verifications SET is_used = TRUE WHERE id = $1`, [otpRes.rows[0].id]);
 
-    const userExist = await db.query(`SELECT id FROM users WHERE email = $1 OR phone = $2`, [email, phone]);
+    const userExist = await db.query(`SELECT id FROM users WHERE email = $1 OR phone = $2`, [cleanEmail, phone]);
     if (userExist.rows.length > 0) {
       return res.status(400).json({ message: 'Email hoặc Số điện thoại đã được sử dụng.' });
     }
@@ -93,7 +116,7 @@ exports.register = async (req, res) => {
       const userRes = await db.query(
         `INSERT INTO users (role, full_name, email, phone, password_hash, is_email_verified)
          VALUES ('TENANT_ADMIN', $1, $2, $3, $4, TRUE) RETURNING id`,
-        [fullName, email, phone, passwordHash]
+        [fullName, cleanEmail, phone, passwordHash]
       );
       const ownerId = userRes.rows[0].id;
 
@@ -215,19 +238,22 @@ exports.resetPassword = async (req, res) => {
     return res.status(400).json({ message: 'Vui lòng nhập đầy đủ Email, Mã OTP và Mật khẩu mới.' });
   }
 
+  const cleanEmail = String(email || '').trim().toLowerCase();
+  const cleanOtp = String(otpCode || '').trim();
+
   try {
     const otpRes = await db.query(
       `SELECT * FROM otp_verifications
        WHERE email = $1 AND otp_code = $2 AND is_used = FALSE AND expires_at > NOW()
        ORDER BY created_at DESC LIMIT 1`,
-      [email, otpCode]
+      [cleanEmail, cleanOtp]
     );
 
     if (otpRes.rows.length === 0) {
       return res.status(400).json({ message: 'Mã OTP không đúng hoặc đã hết hạn.' });
     }
 
-    const userRes = await db.query(`SELECT id FROM users WHERE email = $1`, [email]);
+    const userRes = await db.query(`SELECT id FROM users WHERE email = $1`, [cleanEmail]);
     if (userRes.rows.length === 0) {
       return res.status(404).json({ message: 'Không tìm thấy tài khoản gắn với email này.' });
     }
@@ -237,7 +263,7 @@ exports.resetPassword = async (req, res) => {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(newPassword, salt);
 
-    await db.query(`UPDATE users SET password_hash = $1 WHERE email = $2`, [passwordHash, email]);
+    await db.query(`UPDATE users SET password_hash = $1 WHERE email = $2`, [passwordHash, cleanEmail]);
 
     res.json({
       success: true,
