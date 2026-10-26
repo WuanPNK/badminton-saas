@@ -18,7 +18,6 @@ backend/uploads/
 uploads/
 backend/.db_initialized
 .db_initialized
-LICH_SU_TRO_CHUYEN.*
 
 # Editor directories and files
 .vscode/*
