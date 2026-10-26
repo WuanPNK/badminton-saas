@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon src/app.js",
+    "dev": "nodemon --watch src --watch .env src/app.js",
     "init-db": "node src/scripts/initDb.js"
   },
   "keywords": [],
@@ -17,7 +17,9 @@
     "express": "^5.3.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^10.1.2",
-    "pg": "^8.23.1"
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4",
+    "socket.io": "^4.8.4"
   },
   "devDependencies": {
     "nodemon": "^3.1.14"

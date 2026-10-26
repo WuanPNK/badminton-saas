@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
+import socket from '../../config/socket';
 
 // Danh sách các mốc thời gian cách nhau 30 phút (Từ 05:00 đến 22:00 = 34 block 30 phút)
 const TIME_POINTS = [
@@ -132,6 +133,48 @@ export default function TenantBookingPage() {
     setPricePreview(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantId, selectedDate]);
+
+  // Đề xuất 3: Đồng bộ trạng thái ô sân thời gian thực qua Socket.io
+  useEffect(() => {
+    if (!tenantId) return;
+
+    socket.emit('join_tenant', tenantId);
+
+    const handleBookingUpdate = (payload) => {
+      // Cập nhật lại timeline nếu sự kiện diễn ra vào ngày đang xem (hoặc không giới hạn ngày)
+      if (!payload.date || payload.date === selectedDate) {
+        fetchTimeline();
+
+        if (payload.type === 'BOOKING_CONFIRMED') {
+          toast.success('Có khách vừa thanh toán giữ sân thành công! Lịch sân đã tự động cập nhật.', {
+            id: 'realtime-booked',
+            duration: 3500,
+          });
+        } else if (payload.type === 'BOOKING_CREATED') {
+          toast('Một vị trí sân vừa có người giữ chỗ!', {
+            icon: '⏳',
+            id: 'realtime-hold',
+            duration: 2500,
+          });
+        } else if (payload.type === 'BOOKING_CANCELLED') {
+          toast('Một vị trí sân vừa được giải phóng!', {
+            icon: '🆓',
+            id: 'realtime-released',
+            duration: 2500,
+          });
+        }
+      }
+    };
+
+    socket.on('booking_updated', handleBookingUpdate);
+
+    return () => {
+      socket.emit('leave_tenant', tenantId);
+      socket.off('booking_updated', handleBookingUpdate);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tenantId, selectedDate]);
+
 
   // Tự động tính giá ngay khi người dùng chọn các ô 30 phút trên lưới
   useEffect(() => {

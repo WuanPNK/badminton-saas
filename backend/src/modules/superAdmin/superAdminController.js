@@ -1,8 +1,11 @@
 const db = require('../../config/db');
+const { cleanupExpiredPendingTenants } = require('../../utils/cleanup');
 
 // 1. LẤY TẤT CẢ DANH SÁCH CHỜ DUYỆT (Chủ sân, Sân mới, Thẻ HSSV)
 exports.getPendingApprovals = async (req, res) => {
   try {
+    // Tự động dọn dẹp các cụm sân PENDING quá hạn 7 ngày trước khi trả về danh sách
+    await cleanupExpiredPendingTenants();
     const pendingTenants = await db.query(
       `SELECT t.*, u.full_name AS owner_name, u.email AS owner_email
        FROM tenants t
@@ -26,12 +29,25 @@ exports.getPendingApprovals = async (req, res) => {
        ORDER BY created_at DESC`
     );
 
+    const pendingSubscriptions = await db.query(
+      `SELECT ts.*, t.name AS tenant_name, t.district, t.address, t.phone_contact,
+              u.full_name AS owner_name, u.email AS owner_email,
+              sp.name AS plan_name, sp.max_courts, sp.price_per_month, sp.badge
+       FROM tenant_subscriptions ts
+       JOIN tenants t ON ts.tenant_id = t.id
+       JOIN users u ON t.owner_id = u.id
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE ts.payment_status = 'PENDING'
+       ORDER BY ts.created_at DESC`
+    );
+
     res.json({
       success: true,
       data: {
         pendingTenants: pendingTenants.rows,
         pendingCourts: pendingCourts.rows,
         pendingStudents: pendingStudents.rows,
+        pendingSubscriptions: pendingSubscriptions.rows,
       },
     });
   } catch (error) {
@@ -422,7 +438,8 @@ exports.getPlatformDashboard = async (req, res) => {
       SELECT 
         (SELECT COUNT(*) FROM tenants WHERE status = 'PENDING') AS pending_tenants,
         (SELECT COUNT(*) FROM courts WHERE status = 'PENDING') AS pending_courts,
-        (SELECT COUNT(*) FROM users WHERE student_status = 'PENDING_APPROVAL') AS pending_students
+        (SELECT COUNT(*) FROM users WHERE student_status = 'PENDING_APPROVAL') AS pending_students,
+        (SELECT COUNT(*) FROM tenant_subscriptions WHERE payment_status = 'PENDING') AS pending_subscriptions
     `);
 
     res.json({
@@ -624,5 +641,130 @@ exports.getSuperAdminRevenueExport = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Lỗi khi trích xuất báo cáo doanh thu SaaS Super Admin.' });
+  }
+};
+
+// 13. LẤY DANH SÁCH YÊU CẦU ĐĂNG KÝ GÓI CƯỚC CHỜ DUYỆT (CHỦ SÂN GỬI)
+exports.getPendingSubscriptions = async (req, res) => {
+  try {
+    const result = await db.query(
+      `SELECT ts.*, t.name AS tenant_name, t.district, t.address, t.phone_contact,
+              u.full_name AS owner_name, u.email AS owner_email,
+              sp.name AS plan_name, sp.max_courts, sp.price_per_month, sp.badge
+       FROM tenant_subscriptions ts
+       JOIN tenants t ON ts.tenant_id = t.id
+       JOIN users u ON t.owner_id = u.id
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE ts.payment_status = 'PENDING'
+       ORDER BY ts.created_at DESC`
+    );
+
+    res.json({
+      success: true,
+      pendingSubscriptions: result.rows,
+    });
+  } catch (error) {
+    console.error('Lỗi lấy danh sách gói cước chờ duyệt:', error);
+    res.status(500).json({ message: 'Lỗi khi tải danh sách gói cước chờ duyệt.' });
+  }
+};
+
+// 14. PHÊ DUYỆT KÍCH HOẠT GÓI CƯỚC CHO CHỦ SÂN
+exports.approveSubscription = async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const subCheck = await db.query(
+      `SELECT ts.*, sp.name AS plan_name, sp.price_per_month, t.name AS tenant_name, t.status AS tenant_status
+       FROM tenant_subscriptions ts
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       JOIN tenants t ON ts.tenant_id = t.id
+       WHERE ts.id = $1`,
+      [id]
+    );
+
+    if (subCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu đăng ký gói cước.' });
+    }
+
+    const sub = subCheck.rows[0];
+
+    let intervalString = '1 month';
+    if (sub.billing_cycle === '6_MONTHS') {
+      intervalString = '6 months';
+    } else if (sub.billing_cycle === 'YEARLY') {
+      intervalString = '12 months';
+    }
+
+    const updateRes = await db.query(
+      `UPDATE tenant_subscriptions
+       SET payment_status = 'PAID',
+           start_date = CURRENT_DATE,
+           end_date = CURRENT_DATE + $1::interval,
+           approved_at = NOW()
+       WHERE id = $2
+       RETURNING *`,
+      [intervalString, id]
+    );
+
+    // Nếu cụm sân này đang ở trạng thái PENDING thì tự động kích hoạt ACTIVE luôn
+    if (sub.tenant_status === 'PENDING') {
+      await db.query(`UPDATE tenants SET status = 'ACTIVE' WHERE id = $1`, [sub.tenant_id]);
+    }
+
+    res.json({
+      success: true,
+      message: `Đã phê duyệt và kích hoạt thành công ${sub.plan_name} cho cụm sân ${sub.tenant_name}!`,
+      subscription: updateRes.rows[0],
+    });
+  } catch (error) {
+    console.error('Lỗi phê duyệt gói cước:', error);
+    res.status(500).json({ message: 'Lỗi khi phê duyệt gói cước.' });
+  }
+};
+
+// 15. TỪ CHỐI DUYỆT GÓI CƯỚC & HOÀN TIỀN VỀ TÀI KHOẢN CHỦ SÂN
+exports.rejectSubscription = async (req, res) => {
+  const { id } = req.params;
+  const { rejectionReason } = req.body;
+
+  try {
+    const subCheck = await db.query(
+      `SELECT ts.*, sp.name AS plan_name, t.name AS tenant_name
+       FROM tenant_subscriptions ts
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       JOIN tenants t ON ts.tenant_id = t.id
+       WHERE ts.id = $1`,
+      [id]
+    );
+
+    if (subCheck.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy yêu cầu đăng ký gói cước.' });
+    }
+
+    const sub = subCheck.rows[0];
+
+    const updateRes = await db.query(
+      `UPDATE tenant_subscriptions
+       SET payment_status = 'REFUNDED',
+           refunded_at = NOW(),
+           rejection_reason = $1
+       WHERE id = $2
+       RETURNING *`,
+      [rejectionReason || 'Super Admin từ chối phê duyệt gói cước', id]
+    );
+
+    const bankInfo = sub.refund_bank_name
+      ? `${sub.refund_bank_name} - STK: ${sub.refund_account_number} (${sub.refund_account_name})`
+      : 'Tài khoản ngân hàng của chủ sân';
+
+    res.json({
+      success: true,
+      message: `Đã từ chối gói cước cho cụm sân ${sub.tenant_name}. Hệ thống đã xác nhận hoàn tiền ${Number(sub.amount_paid).toLocaleString()} ₫ về ${bankInfo}.`,
+      subscription: updateRes.rows[0],
+    });
+  } catch (error) {
+    console.error('Lỗi từ chối gói cước:', error);
+    res.status(500).json({ message: 'Lỗi khi từ chối gói cước.' });
   }
 };

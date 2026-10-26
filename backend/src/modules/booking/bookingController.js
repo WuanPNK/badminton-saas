@@ -1,5 +1,6 @@
 const db = require('../../config/db');
 const { validateTimeBlocks, calculateBookingPrice } = require('./pricingHelper');
+const { notifyBookingUpdate } = require('../../config/socket');
 
 // 1. LẤY DỮ LIỆU LƯỚI THỜI GIAN (TIMELINE GRID) CỦA CỤM SÂN THEO NGÀY
 exports.getDailyTimeline = async (req, res) => {
@@ -11,6 +12,14 @@ exports.getDailyTimeline = async (req, res) => {
   }
 
   try {
+    // Tự động chuyển các ca CONFIRMED đã hết giờ (end_time <= NOW()) thành COMPLETED
+    await db.query(
+      `UPDATE bookings
+       SET status = 'COMPLETED', updated_at = NOW()
+       WHERE tenant_id = $1 AND status = 'CONFIRMED' AND end_time <= NOW()`,
+      [tenantId]
+    );
+
     // Lấy danh sách sân đã PUBLISHED của cụm sân
     const courtsRes = await db.query(
       `SELECT id, name, type, is_under_maintenance, maintenance_start, maintenance_note
@@ -23,7 +32,7 @@ exports.getDailyTimeline = async (req, res) => {
     // Lấy tất cả các ca đặt đang giữ chỗ (dưới 15 phút) hoặc đã xác nhận trong ngày đó
     const bookingsRes = await db.query(
       `SELECT id, booking_code, court_id, booking_type, start_time, end_time, status,
-              walk_in_guest_name, walk_in_guest_phone, user_id, checked_in_at, final_price
+              walk_in_guest_name, walk_in_guest_phone, user_id, checked_in_at, is_checked_in, final_price
        FROM bookings
        WHERE tenant_id = $1
          AND booking_date = $2
@@ -202,10 +211,20 @@ exports.createVisualBooking = async (req, res) => {
 
     await client.query('COMMIT');
 
+    const createdBooking = insertRes.rows[0];
+
+    // Phát sự kiện cập nhật thời gian thực qua Socket.io
+    notifyBookingUpdate(tenantId, {
+      type: 'BOOKING_CREATED',
+      booking: createdBooking,
+      date: bookingDate,
+      courtId: courtId,
+    });
+
     res.status(201).json({
       success: true,
       message: 'Đã tạo đơn đặt sân. Vui lòng thanh toán 100% tiền sân để hoàn tất xác nhận.',
-      booking: insertRes.rows[0]
+      booking: createdBooking
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -333,6 +352,13 @@ exports.createStaffBooking = async (req, res) => {
 
     await client.query('COMMIT');
 
+    // Phát sự kiện cập nhật thời gian thực qua Socket.io
+    notifyBookingUpdate(tenantId, {
+      type: 'STAFF_BOOKING_CREATED',
+      bookings: createdBookings,
+      date: bookingDate,
+    });
+
     res.status(201).json({
       success: true,
       message: `Đã tạo lịch ${bookingType === 'EVENT' ? `Sự kiện (${createdBookings.length} sân)` : 'Vãng lai'} thành công!`,
@@ -353,7 +379,8 @@ exports.getMyBookings = async (req, res) => {
   try {
     const result = await db.query(
       `SELECT b.*, t.name AS tenant_name, t.address AS tenant_address, c.name AS court_name, c.type AS court_type,
-              EXISTS(SELECT 1 FROM reviews r WHERE r.booking_id = b.id) AS has_reviewed
+              EXISTS(SELECT 1 FROM reviews r WHERE r.booking_id = b.id) AS has_reviewed,
+              ((b.is_checked_in = TRUE OR b.checked_in_at IS NOT NULL) AND (b.status = 'COMPLETED' OR b.end_time <= NOW())) AS can_review
        FROM bookings b
        JOIN tenants t ON b.tenant_id = t.id
        JOIN courts c ON b.court_id = c.id
@@ -377,17 +404,66 @@ exports.updateBookingOperationStatus = async (req, res) => {
 
   try {
     if (action === 'CHECK_IN') {
+      const bookingCheck = await db.query(
+        `SELECT id, start_time, end_time, status, is_checked_in, checked_in_at
+         FROM bookings WHERE id = $1 AND tenant_id = $2`,
+        [id, tenantId]
+      );
+
+      if (bookingCheck.rows.length === 0) {
+        return res.status(404).json({ message: 'Không tìm thấy đơn đặt sân.' });
+      }
+
+      const b = bookingCheck.rows[0];
+      if (b.status !== 'CONFIRMED' && b.status !== 'COMPLETED') {
+        return res.status(400).json({ message: 'Chỉ đơn đặt sân đã thanh toán (CONFIRMED) mới có thể Check-in.' });
+      }
+
+      if (b.is_checked_in || b.checked_in_at) {
+        return res.status(400).json({ message: 'Khách hàng đã check-in ca chơi này rồi!' });
+      }
+
+      const now = new Date();
+      const startTime = new Date(b.start_time);
+      const endTime = new Date(b.end_time);
+      const windowStart = new Date(startTime.getTime() - 15 * 60 * 1000);
+
+      if (now < windowStart) {
+        const timeStr = windowStart.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+        return res.status(400).json({
+          message: `Chưa đến giờ check-in! Nút check-in chỉ mở từ 15 phút trước giờ chơi (từ ${timeStr}).`
+        });
+      }
+
+      if (now > endTime) {
+        return res.status(400).json({
+          message: 'Ca chơi này đã kết thúc, không thể thực hiện check-in.'
+        });
+      }
+
       const result = await db.query(
         `UPDATE bookings
-         SET checked_in_at = NOW(), updated_at = NOW()
-         WHERE id = $1 AND tenant_id = $2 AND status = 'CONFIRMED'
+         SET checked_in_at = NOW(), is_checked_in = TRUE, updated_at = NOW()
+         WHERE id = $1 AND tenant_id = $2
          RETURNING *`,
         [id, tenantId]
       );
-      if (result.rows.length === 0) {
-        return res.status(400).json({ message: 'Không tìm thấy đơn CONFIRMED hợp lệ để Check-in.' });
-      }
-      return res.json({ success: true, message: 'Khách đã Check-in nhận sân!', booking: result.rows[0] });
+
+      const checkedInBooking = result.rows[0];
+
+      // Phát sự kiện cập nhật thời gian thực qua Socket.io
+      notifyBookingUpdate(tenantId, {
+        type: 'BOOKING_CHECKED_IN',
+        booking: checkedInBooking,
+        date: checkedInBooking.booking_date,
+        courtId: checkedInBooking.court_id,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Khách đã Check-in nhận sân thành công!',
+        booking: checkedInBooking
+      });
     }
 
     if (action === 'COMPLETE') {
@@ -401,10 +477,21 @@ exports.updateBookingOperationStatus = async (req, res) => {
       if (result.rows.length === 0) {
         return res.status(400).json({ message: 'Chỉ có thể hoàn tất đơn đang ở trạng thái CONFIRMED.' });
       }
+
+      const completedBooking = result.rows[0];
+
+      // Phát sự kiện cập nhật thời gian thực qua Socket.io
+      notifyBookingUpdate(tenantId, {
+        type: 'BOOKING_COMPLETED',
+        booking: completedBooking,
+        date: completedBooking.booking_date,
+        courtId: completedBooking.court_id,
+      });
+
       return res.json({
         success: true,
         message: 'Đã hoàn tất ca sân! Khách hàng hiện đã có thể đánh giá sân.',
-        booking: result.rows[0]
+        booking: completedBooking
       });
     }
 
@@ -432,6 +519,16 @@ exports.cancelPendingBooking = async (req, res) => {
       return res.status(404).json({ message: 'Không tìm thấy đơn PENDING hợp lệ để hủy.' });
     }
 
+    const cancelledBooking = result.rows[0];
+
+    // Phát sự kiện cập nhật thời gian thực qua Socket.io
+    notifyBookingUpdate(cancelledBooking.tenant_id, {
+      type: 'BOOKING_CANCELLED',
+      booking: cancelledBooking,
+      date: cancelledBooking.booking_date,
+      courtId: cancelledBooking.court_id,
+    });
+
     res.json({
       success: true,
       message: 'Đã hủy đơn giữ chỗ chưa thanh toán thành công.'
@@ -441,3 +538,94 @@ exports.cancelPendingBooking = async (req, res) => {
     res.status(500).json({ message: 'Lỗi khi hủy đơn giữ chỗ.' });
   }
 };
+
+// 8. LỄ TÂN QUÉT HOẶC NHẬP MÃ QR ĐỂ CHECK-IN NHANH 1 GIÂY
+exports.quickCheckIn = async (req, res) => {
+  const tenantId = req.tenant.id;
+  let { code } = req.body; // e.g. "CHECKIN:DS123456" hoặc "DS123456"
+  if (!code) {
+    return res.status(400).json({ message: 'Vui lòng cung cấp mã vé hoặc quét mã QR.' });
+  }
+
+  code = code.trim().replace(/^CHECKIN:/i, '').replace(/^#/, '').trim().toUpperCase();
+
+  try {
+    const bookingRes = await db.query(
+      `SELECT b.*, c.name AS court_name, u.full_name AS customer_name, u.phone AS customer_phone
+       FROM bookings b
+       JOIN courts c ON b.court_id = c.id
+       LEFT JOIN users u ON b.user_id = u.id
+       WHERE (b.booking_code = $1 OR CAST(b.id AS TEXT) = $1) AND b.tenant_id = $2`,
+      [code, tenantId]
+    );
+
+    if (bookingRes.rows.length === 0) {
+      return res.status(404).json({ message: `Không tìm thấy vé đặt sân với mã [${code}] tại cơ sở của bạn.` });
+    }
+
+    const b = bookingRes.rows[0];
+
+    if (b.status !== 'CONFIRMED' && b.status !== 'COMPLETED') {
+      return res.status(400).json({
+        message: `Vé này đang ở trạng thái [${b.status}], chưa thanh toán hoặc đã bị hủy, không thể Check-in.`
+      });
+    }
+
+    if (b.is_checked_in || b.checked_in_at) {
+      const checkInTime = new Date(b.checked_in_at).toLocaleTimeString('vi-VN');
+      return res.status(400).json({
+        message: `Vé [${b.booking_code}] đã được check-in trước đó vào lúc ${checkInTime}!`
+      });
+    }
+
+    const now = new Date();
+    const startTime = new Date(b.start_time);
+    const endTime = new Date(b.end_time);
+    const windowStart = new Date(startTime.getTime() - 15 * 60 * 1000);
+
+    if (now < windowStart) {
+      const timeStr = windowStart.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
+      return res.status(400).json({
+        message: `Chưa đến giờ check-in! Ca chơi bắt đầu lúc ${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}. Check-in chỉ mở từ 15 phút trước giờ chơi (từ ${timeStr}).`
+      });
+    }
+
+    if (now > endTime) {
+      return res.status(400).json({
+        message: `Ca chơi này đã kết thúc lúc ${endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}, không thể check-in!`
+      });
+    }
+
+    const updateRes = await db.query(
+      `UPDATE bookings
+       SET checked_in_at = NOW(), is_checked_in = TRUE, updated_at = NOW()
+       WHERE id = $1 AND tenant_id = $2
+       RETURNING *`,
+      [b.id, tenantId]
+    );
+
+    const updatedBooking = updateRes.rows[0];
+
+    // Phát thông báo thời gian thực qua Socket.io
+    notifyBookingUpdate(tenantId, {
+      type: 'BOOKING_CHECKED_IN',
+      booking: updatedBooking,
+      date: updatedBooking.booking_date,
+      courtId: updatedBooking.court_id,
+    });
+
+    return res.json({
+      success: true,
+      message: `✓ Check-in thành công cho khách [${b.customer_name || b.walk_in_guest_name || 'Khách'}] - Sân: ${b.court_name}!`,
+      booking: {
+        ...updatedBooking,
+        court_name: b.court_name,
+        customer_name: b.customer_name || b.walk_in_guest_name,
+        customer_phone: b.customer_phone || b.walk_in_guest_phone
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi khi check-in nhanh bằng mã QR:', error);
+    res.status(500).json({ message: 'Lỗi máy chủ khi thực hiện check-in nhanh.' });
+  }
+};

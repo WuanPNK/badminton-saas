@@ -129,7 +129,34 @@ exports.updateTenantSettings = async (req, res) => {
     qrBankName, qrAccountNumber, qrAccountName
   } = req.body;
 
+  const vipCourts = enableVipCourts !== undefined ? enableVipCourts : req.body.enable_vip_courts;
+  const posModule = enablePosModule !== undefined ? enablePosModule : req.body.enable_pos_module;
+  const advancedAnalytics = enableAdvancedAnalytics !== undefined ? enableAdvancedAnalytics : req.body.enable_advanced_analytics;
+  const studentType = studentDiscountType !== undefined ? studentDiscountType : req.body.student_discount_type;
+  const studentVal = studentDiscountValue !== undefined ? studentDiscountValue : req.body.student_discount_value;
+  const phone = phoneContact !== undefined ? phoneContact : req.body.phone_contact;
+  const bankName = qrBankName !== undefined ? qrBankName : req.body.qr_bank_name;
+  const accNum = qrAccountNumber !== undefined ? qrAccountNumber : req.body.qr_account_number;
+  const accName = qrAccountName !== undefined ? qrAccountName : req.body.qr_account_name;
+
   try {
+    if (posModule === true || advancedAnalytics === true) {
+      const subCheck = await db.query(
+        `SELECT sp.name, sp.price_per_month
+         FROM tenant_subscriptions ts
+         JOIN subscription_plans sp ON ts.plan_id = sp.id
+         WHERE ts.tenant_id = $1 AND ts.payment_status = 'PAID' AND ts.end_date >= NOW()
+         ORDER BY ts.end_date DESC LIMIT 1`,
+        [tenantId]
+      );
+      const activePlan = subCheck.rows[0];
+      if (!activePlan || parseFloat(activePlan.price_per_month) < 199000) {
+        return res.status(403).json({
+          message: 'Tính năng Bán hàng POS và Báo cáo nâng cao chỉ khả dụng từ Gói Tiêu Chuẩn (199.000 ₫/tháng) trở lên! Vui lòng đăng ký hoặc nâng cấp gói cước.'
+        });
+      }
+    }
+
     const result = await db.query(
       `UPDATE tenants SET
         name = COALESCE($1, name),
@@ -147,10 +174,10 @@ exports.updateTenantSettings = async (req, res) => {
         qr_account_name = COALESCE($13, qr_account_name)
        WHERE id = $14 RETURNING *`,
       [
-        name, district, address, phoneContact, description,
-        enableVipCourts, enablePosModule, enableAdvancedAnalytics,
-        studentDiscountType, studentDiscountValue,
-        qrBankName, qrAccountNumber, qrAccountName,
+        name, district, address, phone, description,
+        vipCourts, posModule, advancedAnalytics,
+        studentType, studentVal,
+        bankName, accNum, accName,
         tenantId
       ]
     );
@@ -175,14 +202,45 @@ exports.createCourt = async (req, res) => {
     return res.status(400).json({ message: 'Vui lòng nhập tên sân.' });
   }
 
-  // Nếu tạo sân VIP mà công tắc enable_vip_courts đang tắt thì chặn lại
-  if (type === 'VIP' && !req.tenant.enable_vip_courts) {
-    return res.status(403).json({
-      message: 'Bạn cần bật công tắc "Sử dụng Sân VIP" trong phần Cài đặt trước khi tạo sân VIP.'
-    });
-  }
-
   try {
+    // 1. Kiểm tra gói cước hợp lệ (Bắt buộc phải đăng ký gói và được Super Admin phê duyệt)
+    const subRes = await db.query(
+      `SELECT ts.*, sp.name AS plan_name, sp.max_courts, sp.features
+       FROM tenant_subscriptions ts
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE ts.tenant_id = $1 AND ts.payment_status = 'PAID' AND ts.end_date >= NOW()
+       ORDER BY ts.end_date DESC LIMIT 1`,
+      [tenantId]
+    );
+
+    if (subRes.rows.length === 0) {
+      return res.status(403).json({
+        message: 'Bạn chưa đăng ký gói cước SaaS nào hoặc gói cước đã hết hạn. Vui lòng đăng ký gói cước và chờ Super Admin duyệt để có thể khởi tạo sân!'
+      });
+    }
+
+    const activePlan = subRes.rows[0];
+
+    // 2. Kiểm tra số lượng sân con hiện tại so với hạn mức gói cước
+    const countRes = await db.query(
+      `SELECT COUNT(*) FROM courts WHERE tenant_id = $1`,
+      [tenantId]
+    );
+    const currentCourtCount = parseInt(countRes.rows[0].count, 10);
+
+    if (currentCourtCount >= activePlan.max_courts) {
+      return res.status(400).json({
+        message: `Gói cước "${activePlan.plan_name}" của bạn chỉ cho phép quản lý tối đa ${activePlan.max_courts} sân. Bạn đã tạo ${currentCourtCount} sân. Vui lòng nâng cấp gói cước cao hơn để khởi tạo thêm sân!`
+      });
+    }
+
+    // Nếu tạo sân VIP mà công tắc enable_vip_courts đang tắt thì chặn lại
+    if (type === 'VIP' && !req.tenant.enable_vip_courts) {
+      return res.status(403).json({
+        message: 'Bạn cần bật công tắc "Sử dụng Sân VIP" trong phần Cài đặt trước khi tạo sân VIP.'
+      });
+    }
+
     const result = await db.query(
       `INSERT INTO courts (tenant_id, name, type, status)
        VALUES ($1, $2, $3, 'PENDING') RETURNING *`,
@@ -191,9 +249,10 @@ exports.createCourt = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Đã tạo sân mới. Sân đang ở trạng thái PENDING chờ Super Admin duyệt để hiển thị lên sàn!',
+      message: `Đã tạo sân mới (${currentCourtCount + 1}/${activePlan.max_courts} sân). Sân đang ở trạng thái PENDING chờ Super Admin duyệt để hiển thị lên sàn!`,
       court: result.rows[0]
     });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Lỗi khi tạo sân mới.' });
@@ -369,11 +428,27 @@ exports.createPricingRule = async (req, res) => {
   }
 
   try {
+    const subCheck = await db.query(
+      `SELECT sp.name, sp.price_per_month
+       FROM tenant_subscriptions ts
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE ts.tenant_id = $1 AND ts.payment_status = 'PAID' AND ts.end_date >= NOW()
+       ORDER BY ts.end_date DESC LIMIT 1`,
+      [tenantId]
+    );
+    const activePlan = subCheck.rows[0];
+    if (!activePlan || parseFloat(activePlan.price_per_month) < 199000) {
+      return res.status(403).json({
+        message: 'Tính năng Cấu hình Bảng giá động chỉ khả dụng từ Gói Tiêu Chuẩn (199.000 ₫/tháng) trở lên! Vui lòng đăng ký hoặc nâng cấp gói cước.'
+      });
+    }
+
     const result = await db.query(
       `INSERT INTO pricing_rules (tenant_id, court_type, start_time, end_time, price_per_hour, days_of_week)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
       [tenantId, courtType, startTime, endTime, pricePerHour, daysOfWeek]
     );
+
 
     res.status(201).json({
       success: true,
@@ -779,5 +854,235 @@ exports.getTenantRevenueExport = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Lỗi khi trích xuất dữ liệu báo cáo kế toán.' });
+  }
+};
+
+// 17. KIỂM TRA TRẠNG THÁI CHỜ DUYỆT CỦA CỤM SÂN (Dành cho màn hình Pending)
+exports.getPendingTenantStatus = async (req, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    if (!tenantId) {
+      return res.status(404).json({ status: 'NOT_FOUND', message: 'Tài khoản không gắn với cụm sân nào.' });
+    }
+
+    const tenantRes = await db.query(
+      `SELECT id, name, district, address, phone_contact, status, created_at FROM tenants WHERE id = $1`,
+      [tenantId]
+    );
+
+    if (tenantRes.rows.length === 0) {
+      return res.status(404).json({ status: 'DELETED', message: 'Hồ sơ cụm sân không tồn tại hoặc đã bị xóa.' });
+    }
+
+    const tenant = tenantRes.rows[0];
+    const createdAt = new Date(tenant.created_at);
+    const diffMs = Date.now() - createdAt.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    // Kiểm tra quy định tự động xóa sau 7 ngày nếu chưa được duyệt
+    if (tenant.status === 'PENDING' && diffDays >= 7) {
+      await db.query(`UPDATE users SET tenant_id = NULL WHERE id = $1`, [req.user.id]);
+      await db.query(`DELETE FROM courts WHERE tenant_id = $1`, [tenantId]);
+      await db.query(`DELETE FROM tenants WHERE id = $1`, [tenantId]);
+      await db.query(`DELETE FROM users WHERE id = $1`, [req.user.id]);
+
+      return res.status(403).json({
+        status: 'EXPIRED',
+        message: 'Hồ sơ đăng ký cụm sân đã quá hạn 7 ngày chờ duyệt mà chưa được phê duyệt nên đã tự động bị xóa khỏi hệ thống.'
+      });
+    }
+
+    if (tenant.status === 'REJECTED') {
+      return res.json({
+        status: 'REJECTED',
+        message: 'Hồ sơ đăng ký cụm sân của bạn đã bị từ chối phê duyệt.'
+      });
+    }
+
+    if (tenant.status === 'ACTIVE') {
+      return res.json({
+        status: 'ACTIVE',
+        message: 'Chúc mừng! Cụm sân của bạn đã được Super Admin phê duyệt thành công!',
+        tenant: {
+          id: tenant.id,
+          name: tenant.name,
+          district: tenant.district,
+          address: tenant.address,
+          phoneContact: tenant.phone_contact,
+          status: tenant.status
+        }
+      });
+    }
+
+    // Trạng thái PENDING
+    const expiresAt = new Date(createdAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const remainingMs = Math.max(0, expiresAt.getTime() - Date.now());
+
+    return res.json({
+      status: 'PENDING',
+      message: 'Hồ sơ cụm sân đang trong hàng đợi chờ Super Admin phê duyệt.',
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        district: tenant.district,
+        address: tenant.address,
+        phoneContact: tenant.phone_contact,
+        status: tenant.status,
+        createdAt: tenant.created_at,
+        expiresAt: expiresAt.toISOString(),
+        remainingMs: remainingMs,
+        daysPassed: Math.floor(diffDays),
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi khi kiểm tra trạng thái cụm sân:', error);
+    res.status(500).json({ message: 'Lỗi khi kiểm tra trạng thái cụm sân.' });
+  }
+};
+
+// 18. LẤY DANH SÁCH GÓI CƯỚC SAAS ĐỂ CHỦ SÂN LỰA CHỌN
+exports.getSubscriptionPlans = async (req, res) => {
+  try {
+    const plansRes = await db.query(
+      `SELECT * FROM subscription_plans WHERE is_active = TRUE ORDER BY price_per_month ASC`
+    );
+    res.json({ success: true, plans: plansRes.rows });
+  } catch (error) {
+    console.error('Lỗi lấy danh sách gói cước:', error);
+    res.status(500).json({ message: 'Lỗi khi tải danh sách gói cước.' });
+  }
+};
+
+// 19. XEM THÔNG TIN GÓI HIỆN TẠI VÀ YÊU CẦU ĐANG CHỜ DUYỆT CỦA CỤM SÂN
+exports.getMySubscription = async (req, res) => {
+  try {
+    const tenantId = req.user.tenant_id;
+    if (!tenantId) {
+      return res.status(404).json({ message: 'Tài khoản không gắn với cụm sân nào.' });
+    }
+
+    // Gói cước đang hiệu lực gần nhất
+    const currentSubRes = await db.query(
+      `SELECT ts.*, sp.name AS plan_name, sp.max_courts, sp.features, sp.commission_rate, sp.badge
+       FROM tenant_subscriptions ts
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE ts.tenant_id = $1 AND ts.payment_status = 'PAID'
+       ORDER BY ts.end_date DESC LIMIT 1`,
+      [tenantId]
+    );
+
+    // Yêu cầu đăng ký / gia hạn đang PENDING chờ Super Admin duyệt
+    const pendingSubRes = await db.query(
+      `SELECT ts.*, sp.name AS plan_name, sp.max_courts, sp.price_per_month, sp.badge
+       FROM tenant_subscriptions ts
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE ts.tenant_id = $1 AND ts.payment_status = 'PENDING'
+       ORDER BY ts.created_at DESC LIMIT 1`,
+      [tenantId]
+    );
+
+    // Toàn bộ lịch sử đăng ký của cụm sân
+    const historyRes = await db.query(
+      `SELECT ts.*, sp.name AS plan_name, sp.badge
+       FROM tenant_subscriptions ts
+       JOIN subscription_plans sp ON ts.plan_id = sp.id
+       WHERE ts.tenant_id = $1
+       ORDER BY ts.created_at DESC`,
+      [tenantId]
+    );
+
+    res.json({
+      success: true,
+      currentSubscription: currentSubRes.rows[0] || null,
+      pendingSubscription: pendingSubRes.rows[0] || null,
+      history: historyRes.rows,
+    });
+  } catch (error) {
+    console.error('Lỗi khi lấy thông tin gói cước chủ sân:', error);
+    res.status(500).json({ message: 'Lỗi khi tải thông tin gói cước.' });
+  }
+};
+
+// 20. CHỦ SÂN LỰA CHỌN GÓI, THANH TOÁN VÀ GỬI YÊU CẦU DUYỆT (CHỜ SUPER ADMIN DUYỆT)
+exports.requestSubscription = async (req, res) => {
+  const {
+    planId,
+    billingCycle = 'MONTHLY',
+    transactionCode,
+    paymentProofNote,
+    refundBankName,
+    refundAccountNumber,
+    refundAccountName
+  } = req.body;
+
+  const tenantId = req.user.tenant_id;
+  if (!tenantId) {
+    return res.status(403).json({ message: 'Tài khoản không gắn với cụm sân nào.' });
+  }
+
+  if (!planId) {
+    return res.status(400).json({ message: 'Vui lòng chọn gói cước muốn đăng ký.' });
+  }
+
+  try {
+    // Kiểm tra xem cụm sân có yêu cầu nào đang PENDING chưa
+    const pendingCheck = await db.query(
+      `SELECT id FROM tenant_subscriptions WHERE tenant_id = $1 AND payment_status = 'PENDING'`,
+      [tenantId]
+    );
+    if (pendingCheck.rows.length > 0) {
+      return res.status(400).json({
+        message: 'Cụm sân của bạn đang có một yêu cầu đăng ký gói cước chờ Super Admin phê duyệt. Vui lòng chờ duyệt hoặc liên hệ hỗ trợ.'
+      });
+    }
+
+    const planRes = await db.query(`SELECT * FROM subscription_plans WHERE id = $1`, [planId]);
+    if (planRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Gói cước không tồn tại.' });
+    }
+
+    const plan = planRes.rows[0];
+    const monthlyRate = Number(plan.price_per_month);
+
+    let amountPaid = 0;
+    if (monthlyRate > 0) {
+      if (billingCycle === '6_MONTHS') {
+        amountPaid = Math.round(monthlyRate * 6 * 0.9); // Giảm 10%
+      } else if (billingCycle === 'YEARLY') {
+        amountPaid = Math.round(monthlyRate * 12 * 0.8); // Giảm 20%
+      } else {
+        amountPaid = monthlyRate;
+      }
+    }
+
+    const insertRes = await db.query(
+      `INSERT INTO tenant_subscriptions (
+        tenant_id, plan_id, amount_paid, start_date, end_date,
+        payment_status, billing_cycle, transaction_code, payment_proof_note,
+        refund_bank_name, refund_account_number, refund_account_name
+      )
+      VALUES ($1, $2, $3, CURRENT_DATE, CURRENT_DATE, 'PENDING', $4, $5, $6, $7, $8, $9)
+      RETURNING *`,
+      [
+        tenantId,
+        planId,
+        amountPaid,
+        billingCycle,
+        transactionCode || '',
+        paymentProofNote || '',
+        refundBankName || '',
+        refundAccountNumber || '',
+        refundAccountName || ''
+      ]
+    );
+
+    res.status(201).json({
+      success: true,
+      message: `Đã gửi yêu cầu đăng ký ${plan.name} thành công! Super Admin sẽ kiểm tra và phê duyệt kích hoạt cho bạn.`,
+      subscription: insertRes.rows[0]
+    });
+  } catch (error) {
+    console.error('Lỗi khi gửi yêu cầu đăng ký gói cước:', error);
+    res.status(500).json({ message: 'Lỗi khi gửi yêu cầu đăng ký gói cước.' });
   }
 };

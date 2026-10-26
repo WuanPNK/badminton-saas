@@ -54,7 +54,7 @@ exports.sendOTP = async (req, res) => {
     }
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 phút hiệu lực
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút hiệu lực
 
     await db.query(
       `INSERT INTO otp_verifications (email, otp_code, purpose, expires_at)
@@ -66,7 +66,7 @@ exports.sendOTP = async (req, res) => {
 
     res.json({
       success: true,
-      message: `Mã OTP 6 số đã được gửi đến hộp thư ${cleanEmail}. Vui lòng kiểm tra hộp thư đến (hoặc hòm thư Rác/Spam).`,
+      message: `Mã OTP 6 số đã được gửi đến hộp thư ${cleanEmail}. Vui lòng kiểm tra hộp thư đến (hoặc hòm thư Rác/Spam). Mã có hiệu lực trong 10 phút.`,
     });
   } catch (error) {
     console.error('Lỗi khi gửi email OTP:', error.message || error);
@@ -99,7 +99,32 @@ exports.register = async (req, res) => {
     );
 
     if (otpRes.rows.length === 0) {
-      return res.status(400).json({ message: 'Mã OTP không chính xác hoặc đã hết hạn.' });
+      // Phân tích chi tiết nguyên nhân lỗi để người dùng biết chính xác
+      const historyOtp = await db.query(
+        `SELECT * FROM otp_verifications WHERE email = $1 AND otp_code = $2 ORDER BY created_at DESC LIMIT 1`,
+        [cleanEmail, cleanOtp]
+      );
+
+      if (historyOtp.rows.length === 0) {
+        return res.status(400).json({
+          message: 'Mã OTP không chính xác. Vui lòng mở email mới nhất để lấy đúng mã 6 số.'
+        });
+      }
+
+      const foundOtp = historyOtp.rows[0];
+      if (foundOtp.is_used) {
+        return res.status(400).json({
+          message: 'Mã OTP này đã được sử dụng. Vui lòng bấm "Gửi lại mã OTP" để nhận mã mới.'
+        });
+      }
+
+      if (new Date(foundOtp.expires_at) <= new Date()) {
+        return res.status(400).json({
+          message: 'Mã OTP này đã hết hạn. Vui lòng kiểm tra email mới nhất hoặc bấm "Gửi lại mã OTP".'
+        });
+      }
+
+      return res.status(400).json({ message: 'Mã OTP không hợp lệ hoặc đã hết hạn.' });
     }
 
     await db.query(`UPDATE otp_verifications SET is_used = TRUE WHERE id = $1`, [otpRes.rows[0].id]);
@@ -185,14 +210,52 @@ exports.login = async (req, res) => {
       return res.status(400).json({ message: 'Tài khoản hoặc mật khẩu không chính xác.' });
     }
 
+    let tenantData = null;
     if (user.role === 'TENANT_ADMIN' && user.tenant_id) {
-      const tenantRes = await db.query(`SELECT status FROM tenants WHERE id = $1`, [user.tenant_id]);
-      const status = tenantRes.rows[0]?.status;
-      if (status === 'PENDING') {
-        return res.status(403).json({ message: 'Tài khoản cụm sân của bạn đang chờ Super Admin phê duyệt.' });
+      const tenantRes = await db.query(
+        `SELECT id, name, district, address, phone_contact, status, created_at 
+         FROM tenants WHERE id = $1`,
+        [user.tenant_id]
+      );
+      if (tenantRes.rows.length === 0) {
+        return res.status(403).json({ message: 'Không tìm thấy thông tin cụm sân liên kết.' });
       }
-      if (status === 'LOCKED' || status === 'REJECTED') {
-        return res.status(403).json({ message: 'Cụm sân của bạn đã bị khóa hoặc từ chối.' });
+
+      tenantData = tenantRes.rows[0];
+      const status = tenantData.status;
+
+      // 1. Nếu bị Từ chối phê duyệt: Chặn đăng nhập
+      if (status === 'REJECTED') {
+        return res.status(403).json({
+          message: 'Hồ sơ đăng ký cụm sân của bạn đã bị từ chối phê duyệt. Tài khoản không thể đăng nhập vào hệ thống.'
+        });
+      }
+
+      // 2. Nếu bị Khóa: Chặn đăng nhập
+      if (status === 'LOCKED') {
+        return res.status(403).json({
+          message: 'Tài khoản cụm sân của bạn hiện đang bị tạm khóa. Vui lòng liên hệ Super Admin.'
+        });
+      }
+
+      // 3. Nếu đang chờ duyệt (PENDING): Kiểm tra thời hạn 7 ngày
+      if (status === 'PENDING') {
+        const createdAt = new Date(tenantData.created_at);
+        const diffMs = Date.now() - createdAt.getTime();
+        const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+        if (diffDays >= 7) {
+          // Đã quá 7 ngày mà chưa được duyệt -> Tự động xóa tài khoản & cụm sân
+          await db.query(`UPDATE users SET tenant_id = NULL WHERE id = $1`, [user.id]);
+          await db.query(`DELETE FROM courts WHERE tenant_id = $1`, [user.tenant_id]);
+          await db.query(`DELETE FROM tenants WHERE id = $1`, [user.tenant_id]);
+          await db.query(`DELETE FROM users WHERE id = $1`, [user.id]);
+
+          return res.status(403).json({
+            message: 'Hồ sơ đăng ký cụm sân đã quá hạn 7 ngày chờ duyệt mà chưa được phê duyệt nên đã tự động bị xóa khỏi hệ thống. Vui lòng đăng ký lại hồ sơ mới.'
+          });
+        }
+        // CHƯA QUÁ 7 NGÀY: CHO PHÉP ĐĂNG NHẬP ĐỂ VÀO GIAO DIỆN CHỜ DUYỆT!
       }
     }
 
@@ -201,7 +264,8 @@ exports.login = async (req, res) => {
         id: user.id,
         role: user.role,
         tenant_id: user.tenant_id,
-        student_status: user.student_status
+        student_status: user.student_status,
+        tenant_status: tenantData ? tenantData.status : null
       },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
@@ -219,6 +283,17 @@ exports.login = async (req, res) => {
         studentStatus: user.student_status,
         studentCardUrl: user.student_card_url,
         tenantId: user.tenant_id,
+        tenantStatus: tenantData ? tenantData.status : null,
+        tenantInfo: tenantData ? {
+          id: tenantData.id,
+          name: tenantData.name,
+          district: tenantData.district,
+          address: tenantData.address,
+          phoneContact: tenantData.phone_contact,
+          status: tenantData.status,
+          createdAt: tenantData.created_at,
+          expiresAt: new Date(new Date(tenantData.created_at).getTime() + 7 * 24 * 60 * 60 * 1000)
+        } : null,
         bankName: user.bank_name,
         bankAccountNumber: user.bank_account_number,
         bankAccountName: user.bank_account_name
@@ -250,6 +325,30 @@ exports.resetPassword = async (req, res) => {
     );
 
     if (otpRes.rows.length === 0) {
+      const historyOtp = await db.query(
+        `SELECT * FROM otp_verifications WHERE email = $1 AND otp_code = $2 ORDER BY created_at DESC LIMIT 1`,
+        [cleanEmail, cleanOtp]
+      );
+
+      if (historyOtp.rows.length === 0) {
+        return res.status(400).json({
+          message: 'Mã OTP không chính xác. Vui lòng mở email mới nhất để lấy đúng mã 6 số.'
+        });
+      }
+
+      const foundOtp = historyOtp.rows[0];
+      if (foundOtp.is_used) {
+        return res.status(400).json({
+          message: 'Mã OTP này đã được sử dụng. Vui lòng bấm "Gửi lại mã OTP" để nhận mã mới.'
+        });
+      }
+
+      if (new Date(foundOtp.expires_at) <= new Date()) {
+        return res.status(400).json({
+          message: 'Mã OTP này đã hết hạn. Vui lòng kiểm tra email mới nhất hoặc bấm "Gửi lại mã OTP".'
+        });
+      }
+
       return res.status(400).json({ message: 'Mã OTP không đúng hoặc đã hết hạn.' });
     }
 

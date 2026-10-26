@@ -137,7 +137,16 @@ CREATE TABLE tenant_subscriptions (
     amount_paid DECIMAL(12, 2) NOT NULL,
     start_date DATE NOT NULL,
     end_date DATE NOT NULL,
-    payment_status VARCHAR(30) DEFAULT 'PAID', -- PAID, EXPIRED
+    payment_status VARCHAR(30) DEFAULT 'PAID', -- PENDING, PAID, REJECTED, REFUNDED, EXPIRED
+    billing_cycle VARCHAR(20) DEFAULT 'MONTHLY',
+    transaction_code VARCHAR(50),
+    payment_proof_note TEXT,
+    refund_bank_name VARCHAR(50),
+    refund_account_number VARCHAR(50),
+    refund_account_name VARCHAR(100),
+    refunded_at TIMESTAMP,
+    rejection_reason TEXT,
+    approved_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

@@ -34,6 +34,24 @@ export default function TenantDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [reviewsData, setReviewsData] = useState({ reviews: [], stats: {} });
 
+  // Quản lý Gói cước SaaS của Cụm sân
+  const [subData, setSubData] = useState({
+    currentSubscription: null,
+    pendingSubscription: null,
+    history: [],
+  });
+  const [availablePlans, setAvailablePlans] = useState([]);
+  const [checkoutModal, setCheckoutModal] = useState({
+    isOpen: false,
+    plan: null,
+    billingCycle: 'MONTHLY',
+    transactionCode: '',
+    paymentProofNote: '',
+    refundBankName: '',
+    refundAccountNumber: '',
+    refundAccountName: '',
+  });
+
   // Form states cho Thêm mới
   const [newCourt, setNewCourt] = useState({ name: '', type: 'STANDARD' });
   const [newRule, setNewRule] = useState({
@@ -104,11 +122,13 @@ export default function TenantDashboard() {
     });
   };
 
-  // Modal Lên lịch Bảo trì Sân
+  // Modal Lên lịch Bảo trì Sân (Chuẩn 24 Giờ)
   const [maintenanceModalCourt, setMaintenanceModalCourt] = useState(null);
   const [maintScheduleMode, setMaintScheduleMode] = useState('NOW'); // 'NOW' hoặc 'SCHEDULE'
-  const [maintStartTime, setMaintStartTime] = useState('');
-  const [maintNote, setMaintNote] = useState('Bảo trì định kỳ mặt sân');
+  const [maintStartDate, setMaintStartDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [maintStartTime, setMaintStartTime] = useState('08:00');
+  const [maintNote, setMaintNote] = useState('Bảo trì định kỳ mặt sân & hệ thống đèn');
+
 
   // Quản lý Điều khoản, Mô tả & Hình ảnh sân (CRUD)
   const [venueImages, setVenueImages] = useState([]);
@@ -125,13 +145,15 @@ export default function TenantDashboard() {
 
   const fetchTenantData = async () => {
     try {
-      const [setRes, courtRes, ruleRes, staffRes, anaRes, revRes] = await Promise.all([
+      const [setRes, courtRes, ruleRes, staffRes, anaRes, revRes, subRes, plansRes] = await Promise.all([
         axiosClient.get('/tenant/my-settings'),
         axiosClient.get('/tenant/courts'),
         axiosClient.get('/tenant/pricing-rules'),
         axiosClient.get('/tenant/staff'),
         axiosClient.get('/pos/analytics'),
         axiosClient.get('/tenant/reviews').catch(() => ({ data: { reviews: [], stats: {} } })),
+        axiosClient.get('/tenant/subscription/my-subscription').catch(() => ({ data: { currentSubscription: null, pendingSubscription: null, history: [] } })),
+        axiosClient.get('/tenant/subscription/plans').catch(() => ({ data: { plans: [] } })),
       ]);
 
       setTenant(setRes.data.tenant);
@@ -140,6 +162,17 @@ export default function TenantDashboard() {
       setStaffList(staffRes.data.staffList);
       setAnalytics(anaRes.data);
       setReviewsData(revRes.data);
+
+      if (subRes.data) {
+        setSubData({
+          currentSubscription: subRes.data.currentSubscription || null,
+          pendingSubscription: subRes.data.pendingSubscription || null,
+          history: subRes.data.history || [],
+        });
+      }
+      if (plansRes.data?.plans) {
+        setAvailablePlans(plansRes.data.plans);
+      }
 
       setVenueImages(setRes.data.tenant.images || [
         'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80',
@@ -192,12 +225,45 @@ export default function TenantDashboard() {
   };
 
   // --- 2. XỬ LÝ SÂN (CRUD & BẢO TRÌ) ---
+  const handleOpenAddCourt = () => {
+    if (!subData.currentSubscription) {
+      toast.error('Bạn cần đăng ký gói cước SaaS và được Super Admin phê duyệt trước khi tạo sân!');
+      setTab('SUBSCRIPTION');
+      return;
+    }
+    const maxCourts = Number(subData.currentSubscription.max_courts) || 0;
+    if (courts.length >= maxCourts) {
+      toast.error(
+        `Gói cước "${subData.currentSubscription.plan_name}" của bạn chỉ cho phép quản lý tối đa ${maxCourts} sân. Vui lòng nâng cấp gói cước cao hơn!`
+      );
+      setTab('SUBSCRIPTION');
+      return;
+    }
+    setShowAddCourtModal(true);
+  };
+
   const triggerCreateCourt = (e) => {
     e.preventDefault();
     if (!newCourt.name.trim()) {
       toast.error('Vui lòng nhập tên sân.');
       return;
     }
+
+    if (!subData.currentSubscription) {
+      toast.error('Bạn cần đăng ký gói cước SaaS và được phê duyệt trước khi tạo sân!');
+      setTab('SUBSCRIPTION');
+      return;
+    }
+
+    const maxCourts = Number(subData.currentSubscription.max_courts) || 0;
+    if (courts.length >= maxCourts) {
+      toast.error(
+        `Gói cước "${subData.currentSubscription.plan_name}" của bạn chỉ cho phép quản lý tối đa ${maxCourts} sân. Vui lòng nâng cấp gói!`
+      );
+      setTab('SUBSCRIPTION');
+      return;
+    }
+
     askConfirm({
       title: 'Xác nhận Thêm Sân Mới',
       message: `Bạn có chắc chắn muốn thêm sân "${newCourt.name}" (${newCourt.type}) vào cụm sân?`,
@@ -217,6 +283,7 @@ export default function TenantDashboard() {
       },
     });
   };
+
 
   const triggerUpdateCourt = (e) => {
     e.preventDefault();
@@ -265,10 +332,11 @@ export default function TenantDashboard() {
   const openMaintenanceModal = (court) => {
     setMaintenanceModalCourt(court);
     setMaintScheduleMode('NOW');
-    // Mặc định thời gian là giờ hiện tại
     const now = new Date();
-    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
-    setMaintStartTime(now.toISOString().slice(0, 16));
+    setMaintStartDate(now.toISOString().split('T')[0]);
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = now.getMinutes() < 30 ? '00' : '30';
+    setMaintStartTime(`${hh}:${mm}`);
     setMaintNote('Bảo trì định kỳ mặt sân & hệ thống đèn');
   };
 
@@ -283,9 +351,14 @@ export default function TenantDashboard() {
       icon: '🔧',
       onConfirm: async () => {
         try {
+          const maintenanceStart =
+            maintScheduleMode === 'SCHEDULE'
+              ? `${maintStartDate}T${maintStartTime}:00`
+              : new Date().toISOString();
+
           const payload = {
             isUnderMaintenance: true,
-            maintenanceStart: maintScheduleMode === 'SCHEDULE' ? maintStartTime : new Date().toISOString(),
+            maintenanceStart,
             maintenanceNote: maintNote,
           };
           const res = await axiosClient.put(
@@ -301,6 +374,7 @@ export default function TenantDashboard() {
       },
     });
   };
+
 
   const triggerEndMaintenance = (court) => {
     askConfirm({
@@ -671,6 +745,63 @@ export default function TenantDashboard() {
     }
   };
 
+  // --- 7. XỬ LÝ GÓI CƯỚC SAAS CỦA CHỦ SÂN ---
+  const openCheckoutModal = (plan) => {
+    setCheckoutModal({
+      isOpen: true,
+      plan,
+      billingCycle: 'MONTHLY',
+      transactionCode: '',
+      paymentProofNote: '',
+      refundBankName: tenant?.qr_bank_name || '',
+      refundAccountNumber: tenant?.qr_account_number || '',
+      refundAccountName: tenant?.qr_account_name || '',
+    });
+  };
+
+  const calculateTotalAmount = (plan, billingCycle) => {
+    if (!plan) return 0;
+    const monthly = Number(plan.price_per_month);
+    if (monthly === 0) return 0;
+    if (billingCycle === '6_MONTHS') return Math.round(monthly * 6 * 0.9);
+    if (billingCycle === 'YEARLY') return Math.round(monthly * 12 * 0.8);
+    return monthly;
+  };
+
+  const handleSubmitSubscriptionRequest = async (e) => {
+    e.preventDefault();
+    if (!checkoutModal.plan) return;
+
+    const total = calculateTotalAmount(checkoutModal.plan, checkoutModal.billingCycle);
+    if (total > 0 && !checkoutModal.transactionCode.trim()) {
+      toast.error('Vui lòng nhập Mã giao dịch chuyển khoản VietQR để Super Admin đối soát.');
+      return;
+    }
+
+    if (total > 0 && (!checkoutModal.refundAccountNumber.trim() || !checkoutModal.refundBankName.trim())) {
+      toast.error('Vui lòng điền thông tin tài khoản ngân hàng nhận hoàn tiền.');
+      return;
+    }
+
+    try {
+      const res = await axiosClient.post('/tenant/subscription/request', {
+        planId: checkoutModal.plan.id,
+        billingCycle: checkoutModal.billingCycle,
+        transactionCode: checkoutModal.transactionCode.trim(),
+        paymentProofNote: checkoutModal.paymentProofNote.trim(),
+        refundBankName: checkoutModal.refundBankName.trim(),
+        refundAccountNumber: checkoutModal.refundAccountNumber.trim(),
+        refundAccountName: checkoutModal.refundAccountName.trim(),
+      });
+
+      toast.success(res.data.message);
+      setCheckoutModal((prev) => ({ ...prev, isOpen: false }));
+      fetchTenantData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi gửi yêu cầu đăng ký gói cước.');
+    }
+  };
+
   if (!tenant) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -679,17 +810,27 @@ export default function TenantDashboard() {
     );
   }
 
+  // Kiểm tra gói cước hiện tại
+  const hasPlan = Boolean(subData.currentSubscription);
+  const canUsePos = Boolean(subData.currentSubscription && Number(subData.currentSubscription.price_per_month) >= 199000);
+
   // Danh sách các Menu Tabs (Đã loại bỏ tab Hub trùng lặp, dùng nút Back ở Header)
   const TAB_ITEMS = [
     { id: 'COURTS', label: '🏸 Quản lý Sân & Bảo trì', show: true },
+    {
+      id: 'SUBSCRIPTION',
+      label: hasPlan ? '⚡ Gói Cước SaaS' : '⚡ Gói Cước SaaS (!)',
+      show: true,
+    },
     { id: 'PRICING_RULES', label: '💰 Bảng Giá Động', show: true },
-    { id: 'POS_INVENTORY', label: '📦 Kho hàng POS', show: tenant.enable_pos_module },
+    { id: 'POS_INVENTORY', label: '📦 Kho hàng POS', show: canUsePos && tenant.enable_pos_module },
     { id: 'STAFF', label: '👥 Tài khoản Lễ tân', show: true },
     { id: 'REVIEWS', label: '⭐ Xem đánh giá', show: true },
     { id: 'VENUE_DETAILS', label: '📝 Mô tả', show: true },
     { id: 'ANALYTICS', label: '📊 Báo cáo Doanh thu', show: true },
     { id: 'SETTINGS', label: '⚙️ Cấu hình Cụm sân & VietQR', show: true },
   ];
+
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-20">
@@ -800,6 +941,47 @@ export default function TenantDashboard() {
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-emerald-600 transition-colors">
                   <span>Quản lý sân bãi</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
+                </div>
+              </div>
+
+              {/* CARD 1.5: GÓI CƯỚC & DỊCH VỤ SAAS */}
+              <div
+                onClick={() => setTab('SUBSCRIPTION')}
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
+              >
+                <div className="flex justify-between items-start">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl shadow-sm">
+                    ⚡
+                  </div>
+                  <span
+                    className={`text-[11px] font-black px-2.5 py-1 rounded-full ${
+                      subData.pendingSubscription
+                        ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
+                        : 'bg-indigo-50 text-indigo-700 border border-indigo-200/70'
+                    }`}
+                  >
+                    {subData.pendingSubscription
+                      ? 'Chờ duyệt'
+                      : subData.currentSubscription?.badge || 'Gói SaaS'}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-700 transition-colors tracking-tight">
+                    Gói Cước & Dịch Vụ SaaS
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
+                    {subData.pendingSubscription
+                      ? `Đang chờ duyệt gói ${subData.pendingSubscription.plan_name}`
+                      : `Hạn mức: ${
+                          Number(subData.currentSubscription?.max_courts) >= 999
+                            ? 'Không giới hạn'
+                            : subData.currentSubscription?.max_courts || 8
+                        } sân (${courts.length} sân đang dùng)`}
+                  </p>
+                </div>
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-indigo-600 transition-colors">
+                  <span>Nâng cấp / Gia hạn gói</span>
                   <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
@@ -997,6 +1179,399 @@ export default function TenantDashboard() {
         )}
 
         {/* ========================================================= */}
+        {/* TAB 1.5: GÓI CƯỚC THUÊ NỀN TẢNG & SAAS CHO CHỦ SÂN */}
+        {/* ========================================================= */}
+        {tab === 'SUBSCRIPTION' && (
+          <div className="space-y-6">
+            <div className="flex flex-wrap justify-between items-center gap-3">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">
+                  Bảng Giá Thuê Nền Tảng & Gói Cước SaaS
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Lựa chọn gói cước phù hợp quy mô cụm sân để mở rộng hạn mức sân con, mở khóa bán lẻ POS và thiết lập bảng giá động linh hoạt.
+                </p>
+              </div>
+            </div>
+
+            {/* CẢNH BÁO / TRẠNG THÁI GÓI CƯỚC HIỆN TẠI HOẶC YÊU CẦU CHỜ DUYỆT */}
+            {subData.pendingSubscription && (
+              <div className="bg-gradient-to-r from-amber-500/10 via-amber-500/15 to-amber-500/10 border border-amber-400/40 rounded-3xl p-6 text-amber-950 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping" />
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-800">
+                    Yêu Cầu Đăng Ký Đang Chờ Super Admin Phê Duyệt
+                  </span>
+                </div>
+                <div className="text-sm font-black text-slate-900">
+                  Bạn đã gửi yêu cầu đăng ký: <span className="text-indigo-700">{subData.pendingSubscription.plan_name}</span> (Chu kỳ:{' '}
+                  {subData.pendingSubscription.billing_cycle === 'YEARLY'
+                    ? '1 Năm - Giảm 20%'
+                    : subData.pendingSubscription.billing_cycle === '6_MONTHS'
+                    ? '6 Tháng - Giảm 10%'
+                    : '1 Tháng'})
+                </div>
+                <div className="text-xs text-slate-600 flex flex-wrap gap-4 pt-1">
+                  <span>Số tiền: <strong className="text-emerald-700 font-black">{Number(subData.pendingSubscription.amount_paid).toLocaleString()} ₫</strong></span>
+                  {subData.pendingSubscription.transaction_code && (
+                    <span>Mã giao dịch VietQR: <strong className="font-mono text-slate-800">{subData.pendingSubscription.transaction_code}</strong></span>
+                  )}
+                  <span>Tài khoản hoàn tiền (nếu từ chối): <strong className="text-slate-800">{subData.pendingSubscription.refund_bank_name} - {subData.pendingSubscription.refund_account_number} ({subData.pendingSubscription.refund_account_name})</strong></span>
+                </div>
+                <p className="text-[11px] text-amber-800 pt-1 italic">
+                  * Super Admin sẽ kiểm tra và kích hoạt ngay khi đối soát thành công. Nếu không được duyệt, tiền sẽ được hoàn trả 100% về tài khoản của bạn.
+                </p>
+              </div>
+            )}
+
+            {/* THÔNG BÁO TỪ CHỐI / HOÀN TIỀN (NẾU ĐƠN GẦN NHẤT BỊ TỪ CHỐI) */}
+            {!subData.pendingSubscription && subData.history?.[0]?.payment_status === 'REFUNDED' && (
+              <div className="bg-red-50 border border-red-200/80 rounded-3xl p-5 text-red-950 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">💸</span>
+                  <span className="text-xs font-black uppercase text-red-800">
+                    Yêu Cầu Gói Cước Trước Đó Đã Bị Từ Chối & Hoàn Tiền
+                  </span>
+                </div>
+                <p className="text-xs text-slate-700">
+                  Yêu cầu đăng ký <strong>{subData.history[0].plan_name}</strong> của bạn đã bị từ chối với lý do:{' '}
+                  <em className="text-red-700 font-semibold">"{subData.history[0].rejection_reason || 'Thông tin thanh toán không khớp'}"</em>.
+                </p>
+                <p className="text-[11px] text-slate-600">
+                  Số tiền <strong>{Number(subData.history[0].amount_paid).toLocaleString()} ₫</strong> đã được hệ thống xác nhận hoàn tiền về STK{' '}
+                  <strong className="font-mono">{subData.history[0].refund_account_number}</strong> ({subData.history[0].refund_bank_name}). Bạn có thể đăng ký lại bất kỳ lúc nào bên dưới.
+                </p>
+              </div>
+            )}
+
+            {/* THÔNG TIN GÓI CƯỚC HIỆN TẠI CỦA CỤM SÂN */}
+            {subData.currentSubscription ? (
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-3xl p-6 sm:p-7 text-white shadow-md border border-slate-800 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-2.5 py-0.5 rounded-full">
+                      Gói cước đang hiệu lực
+                    </span>
+                    <span className="text-xs text-indigo-300 font-bold">
+                      {subData.currentSubscription.badge || 'Gói SaaS'}
+                    </span>
+                  </div>
+                  <h3 className="text-2xl font-black text-white">
+                    {subData.currentSubscription.plan_name}
+                  </h3>
+                  <div className="text-xs text-slate-300 flex flex-wrap gap-4 pt-1">
+                    <div>
+                      Hạn mức quản lý:{' '}
+                      <strong className="text-emerald-400 font-black">
+                        {Number(subData.currentSubscription.max_courts) >= 999
+                          ? 'Không giới hạn sân con'
+                          : `Tối đa ${subData.currentSubscription.max_courts} sân con`}
+                      </strong>{' '}
+                      (Đang sử dụng: {courts.length} sân)
+                    </div>
+                    <div>
+                      Hiệu lực đến:{' '}
+                      <strong className="text-white">
+                        {new Date(subData.currentSubscription.end_date).toLocaleDateString('vi-VN')}
+                      </strong>
+                    </div>
+                    <div>
+                      Hoa hồng App:{' '}
+                      <strong className="text-amber-400">
+                        {subData.currentSubscription.commission_rate || 0}%
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const nextPlan = availablePlans.find(
+                        (p) => p.id !== subData.currentSubscription?.plan_id
+                      ) || availablePlans[0];
+                      if (nextPlan) openCheckoutModal(nextPlan);
+                    }}
+                    className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black px-5 py-3 rounded-2xl text-xs transition shadow-lg flex items-center gap-2 cursor-pointer"
+                  >
+                    <span>⚡</span>
+                    <span>Nâng Cấp / Gia Hạn Gói</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gradient-to-r from-amber-950 via-slate-900 to-amber-950 rounded-3xl p-6 sm:p-7 text-white shadow-md border-2 border-amber-500/40 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/40 px-2.5 py-0.5 rounded-full">
+                      ⚠️ Chưa kích hoạt gói cước
+                    </span>
+                    <span className="text-xs text-amber-200 font-bold">
+                      {subData.pendingSubscription ? 'Đang chờ Super Admin duyệt' : 'Chưa đăng ký gói'}
+                    </span>
+                  </div>
+                  <h3 className="text-2xl font-black text-white">
+                    {subData.pendingSubscription
+                      ? `Đang chờ duyệt: ${subData.pendingSubscription.plan_name}`
+                      : 'Bạn chưa đăng ký gói cước SaaS nào'}
+                  </h3>
+                  <p className="text-xs text-amber-100/80 max-w-2xl leading-relaxed">
+                    {subData.pendingSubscription
+                      ? `Bạn đã thanh toán yêu cầu đăng ký gói ${subData.pendingSubscription.plan_name} (Mã GD: #${subData.pendingSubscription.transaction_code || ''}). Vui lòng chờ Super Admin phê duyệt để bắt đầu khởi tạo sân và đón khách!`
+                      : 'Để có thể khởi tạo sân đấu và sử dụng các tính năng phần mềm, bạn cần chọn 1 trong các gói cước bên dưới, chuyển khoản thanh toán và chờ Super Admin phê duyệt.'}
+                  </p>
+                  <div className="text-xs text-slate-300 flex flex-wrap gap-4 pt-1">
+                    <div>
+                      Hạn mức quản lý: <strong className="text-amber-400 font-bold">0 sân</strong> (Cần kích hoạt gói)
+                    </div>
+                    <div>
+                      Trạng thái sân: <strong className="text-amber-200 font-bold">Khóa tạo sân mới cho đến khi có gói</strong>
+                    </div>
+                  </div>
+                </div>
+
+                {!subData.pendingSubscription && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const target = document.getElementById('plans-pricing-section');
+                        if (target) target.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      className="bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black px-5 py-3 rounded-2xl text-xs transition shadow-lg flex items-center gap-2 whitespace-nowrap cursor-pointer"
+                    >
+                      <span>👇</span>
+                      <span>Chọn Gói Cước Ngay</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* BẢNG GIÁ 3 GÓI CƯỚC THỰC TẾ (ALOBO) */}
+            <div className="space-y-4 pt-2" id="plans-pricing-section">
+              <div className="text-center max-w-xl mx-auto space-y-1">
+                <h3 className="text-lg font-black text-slate-900">
+                  Chọn Gói Cước Phù Hợp Để Phát Triển Cụm Sân
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Giảm 10% khi thanh toán 6 tháng • Giảm 20% khi thanh toán 1 năm • Miễn phí 100% đơn tại quầy
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6 items-stretch">
+                {availablePlans.map((p) => {
+                  const monthly = Number(p.price_per_month);
+                  const isCurrent = subData.currentSubscription?.plan_id === p.id;
+                  const isPendingThis = subData.pendingSubscription?.plan_id === p.id;
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`rounded-3xl p-6 bg-white border flex flex-col justify-between transition-all duration-300 relative shadow-sm ${
+                        p.is_featured
+                          ? 'border-emerald-500 ring-2 ring-emerald-500/20 shadow-md'
+                          : 'border-slate-200/90 hover:border-slate-400 hover:shadow-md'
+                      }`}
+                    >
+                      {p.is_featured && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-sm">
+                          ★ ĐƯỢC CHỌN NHIỀU NHẤT
+                        </div>
+                      )}
+
+                      <div className="space-y-4">
+                        <div>
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                            {p.badge}
+                          </span>
+                          <h4 className="text-base font-black text-slate-900 mt-2">{p.name}</h4>
+                          <p className="text-xs text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                            {p.description}
+                          </p>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-100">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-2xl font-black text-slate-900">
+                              {monthly.toLocaleString()} ₫
+                            </span>
+                            <span className="text-xs text-slate-400 font-bold">
+                              / tháng
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-emerald-600 font-bold mt-0.5">
+                            Giảm 10% (6 tháng) • Giảm 20% (1 năm)
+                          </div>
+                        </div>
+
+                        {/* QUY MÔ QUẢN LÝ VÀ PHÍ HOA HỒNG */}
+                        <div className="bg-slate-50 rounded-2xl p-3 text-xs space-y-1.5 border border-slate-100">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 text-[11px]">Quy mô quản lý:</span>
+                            <strong className="text-slate-900 font-black">
+                              {Number(p.max_courts) >= 999 ? 'Không giới hạn sân' : `Tối đa ${p.max_courts} sân`}
+                            </strong>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 text-[11px]">Hoa hồng đặt App:</span>
+                            <strong className="text-indigo-700 font-bold">{p.commission_rate}%</strong>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500 text-[11px]">Đơn tại quầy:</span>
+                            <span className="bg-emerald-100 text-emerald-800 px-2 py-0.2 rounded text-[10px] font-black">
+                              0% (Miễn phí)
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* DANH SÁCH TÍNH NĂNG */}
+                        <div className="space-y-1.5 pt-1">
+                          <div className="text-[11px] font-extrabold text-slate-700 uppercase tracking-wider">
+                            Tính năng nổi bật:
+                          </div>
+                          <ul className="space-y-1.5 text-xs text-slate-600">
+                            {Array.isArray(p.features) &&
+                              p.features.map((feat, idx) => (
+                                <li key={idx} className="flex items-start gap-1.5">
+                                  <span className="text-emerald-500 font-bold">✓</span>
+                                  <span>{feat}</span>
+                                </li>
+                              ))}
+                          </ul>
+                        </div>
+                      </div>
+
+                      <div className="pt-5 mt-4 border-t border-slate-100">
+                        {isCurrent ? (
+                          <button
+                            disabled
+                            className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-xs cursor-not-allowed"
+                          >
+                            ✓ Gói Đang Sử Dụng
+                          </button>
+                        ) : isPendingThis ? (
+                          <button
+                            disabled
+                            className="w-full py-2.5 rounded-xl bg-amber-100 text-amber-800 font-black text-xs cursor-not-allowed animate-pulse"
+                          >
+                            ⏳ Đang Chờ Duyệt...
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => openCheckoutModal(p)}
+                            className={`w-full py-2.5 rounded-xl text-xs font-black transition shadow-sm active:scale-95 cursor-pointer ${
+                              p.is_featured
+                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                                : 'bg-slate-900 hover:bg-slate-800 text-white'
+                            }`}
+                          >
+                            {subData.currentSubscription ? 'Nâng Cấp Gói' : 'Đăng Ký Gói Cước'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+
+            {/* LỊCH SỬ ĐĂNG KÝ VÀ GIAO DỊCH GÓI CƯỚC */}
+            <div className="bg-white p-6 sm:p-7 rounded-3xl shadow-sm border border-slate-100 space-y-4 mt-6">
+              <h3 className="font-extrabold text-slate-900 text-base">
+                Lịch Sử Đăng Ký & Giao Dịch Gói Cước ({subData.history?.length || 0})
+              </h3>
+
+              {!subData.history || subData.history.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs">
+                  Chưa có lịch sử giao dịch gói cước nào.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 text-slate-500 font-black uppercase text-[10px] tracking-wider border-b border-slate-100">
+                      <tr>
+                        <th className="p-3">Gói cước</th>
+                        <th className="p-3">Chu kỳ</th>
+                        <th className="p-3">Số tiền</th>
+                        <th className="p-3">Mã GD</th>
+                        <th className="p-3">Trạng thái</th>
+                        <th className="p-3">Tài khoản hoàn tiền</th>
+                        <th className="p-3">Ngày gửi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {subData.history.map((h) => (
+                        <tr key={h.id} className="hover:bg-slate-50/70">
+                          <td className="p-3 font-bold text-slate-900">
+                            {h.plan_name}
+                            <span className="block text-[10px] text-slate-400 font-normal">
+                              {h.badge}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-700 font-medium">
+                            {h.billing_cycle === 'YEARLY'
+                              ? '1 Năm (-20%)'
+                              : h.billing_cycle === '6_MONTHS'
+                              ? '6 Tháng (-10%)'
+                              : Number(h.amount_paid) === 0
+                              ? 'Dùng thử 14 ngày'
+                              : '1 Tháng'}
+                          </td>
+                          <td className="p-3 font-black text-slate-900">
+                            {Number(h.amount_paid).toLocaleString()} ₫
+                          </td>
+                          <td className="p-3 font-mono text-slate-600">
+                            {h.transaction_code || '—'}
+                          </td>
+                          <td className="p-3">
+                            {h.payment_status === 'PAID' ? (
+                              <span className="bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-bold text-[10px]">
+                                ✓ Đã Kích Hoạt
+                              </span>
+                            ) : h.payment_status === 'PENDING' ? (
+                              <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-bold text-[10px] animate-pulse">
+                                ⏳ Chờ Duyệt
+                              </span>
+                            ) : (
+                              <div className="space-y-0.5">
+                                <span className="bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full font-bold text-[10px]">
+                                  💸 Đã Hoàn Tiền
+                                </span>
+                                {h.rejection_reason && (
+                                  <span className="block text-[10px] text-red-600 italic">
+                                    {h.rejection_reason}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-3 text-slate-600 text-[11px]">
+                            {h.refund_bank_name ? (
+                              <div>
+                                <strong>{h.refund_bank_name}</strong> - {h.refund_account_number} ({h.refund_account_name})
+                              </div>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="p-3 text-slate-400 text-[11px]">
+                            {h.created_at ? new Date(h.created_at).toLocaleDateString('vi-VN') : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
         {/* TAB 2: QUẢN LÝ SÂN & BẢO TRÌ (CRUD & LÊN LỊCH BẢO TRÌ) */}
         {/* ========================================================= */}
         {tab === 'COURTS' && (
@@ -1010,22 +1585,54 @@ export default function TenantDashboard() {
               </div>
             </div>
 
+            {/* CẢNH BÁO NẾU CHƯA CÓ GÓI CƯỚC */}
+            {!subData.currentSubscription && (
+              <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-3xl">⚠️</span>
+                  <div>
+                    <h4 className="font-extrabold text-amber-950 text-sm">
+                      Cụm Sân Chưa Kích Hoạt Gói Cước SaaS
+                    </h4>
+                    <p className="text-xs text-amber-800 mt-0.5">
+                      {subData.pendingSubscription
+                        ? `Yêu cầu đăng ký gói "${subData.pendingSubscription.plan_name}" đang chờ Super Admin phê duyệt. Khi được duyệt, bạn sẽ được khởi tạo tối đa ${subData.pendingSubscription.max_courts} sân.`
+                        : 'Bạn cần đăng ký gói cước và được Super Admin phê duyệt thì mới có thể khởi tạo sân thi đấu và mở bán trên sàn.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTab('SUBSCRIPTION')}
+                  className="bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs whitespace-nowrap shadow-md shadow-amber-600/20 transition cursor-pointer"
+                >
+                  ⚡ {subData.pendingSubscription ? 'Xem Trạng Thái Gói →' : 'Đăng Ký Gói Cước Ngay →'}
+                </button>
+              </div>
+            )}
+
             {/* DANH SÁCH SÂN TOÀN BẢNG (FULL-WIDTH) */}
             <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
               <div className="flex justify-between items-center pb-3 border-b border-slate-100">
                 <div>
                   <h3 className="font-extrabold text-slate-900 text-base">
-                    Danh sách Sân ({courts.length})
+                    Danh sách Sân ({courts.length}
+                    {subData.currentSubscription
+                      ? ` / ${Number(subData.currentSubscription.max_courts) >= 999 ? '∞' : subData.currentSubscription.max_courts}`
+                      : ' / 0'} sân)
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Toàn bộ sân đấu đang quản lý trong cụm sân
+                    {subData.currentSubscription
+                      ? `Hạn mức theo ${subData.currentSubscription.plan_name}: ${courts.length}/${Number(subData.currentSubscription.max_courts) >= 999 ? 'Không giới hạn' : subData.currentSubscription.max_courts} sân`
+                      : 'Chưa kích hoạt gói cước (Khóa tạo sân)'}
                   </p>
                 </div>
                 <ExpandableAddButton
                   label="Thêm sân mới"
-                  onClick={() => setShowAddCourtModal(true)}
+                  onClick={handleOpenAddCourt}
                 />
               </div>
+
 
               <div className="space-y-3">
                 {courts.map((c) => (
@@ -1127,71 +1734,95 @@ export default function TenantDashboard() {
         {/* ========================================================= */}
         {tab === 'PRICING_RULES' && (
           <div className="space-y-6">
-            <div>
-              <h2 className="text-xl font-black text-slate-900">Cấu hình Bảng giá Động</h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Thiết lập mức giá theo từng khung giờ và loại sân (Sân Tiêu Chuẩn hoặc Sân VIP).
-              </p>
-            </div>
-
-            <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
-              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+            {!subData.currentSubscription || Number(subData.currentSubscription.price_per_month) < 199000 ? (
+              <div className="bg-white p-8 sm:p-12 rounded-3xl border-2 border-slate-200/90 text-center max-w-xl mx-auto space-y-4 shadow-sm my-6">
+                <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-700 flex items-center justify-center text-3xl mx-auto shadow-inner">
+                  🔒
+                </div>
                 <div>
-                  <h3 className="font-extrabold text-slate-900 text-base">
-                    Khung giá đang áp dụng ({pricingRules.length})
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Biểu phí giờ chơi theo loại sân tiêu chuẩn và VIP
+                  <h3 className="text-lg font-black text-slate-900">Tính Năng Bảng Giá Động Đang Bị Khóa</h3>
+                  <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
+                    Tính năng Cấu hình Bảng giá động theo từng khung giờ cao điểm và cuối tuần chỉ mở khóa từ <strong>Gói Tiêu Chuẩn (199.000 ₫/tháng)</strong> trở lên.
                   </p>
                 </div>
-                <ExpandableAddButton
-                  label="Thêm khung giá"
-                  onClick={() => setShowAddPricingModal(true)}
-                />
+                <button
+                  type="button"
+                  onClick={() => setTab('SUBSCRIPTION')}
+                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black px-6 py-3 rounded-2xl text-xs transition shadow-md shadow-emerald-600/20 cursor-pointer"
+                >
+                  ⚡ Đăng Ký / Nâng Cấp Gói Tiêu Chuẩn Ngay →
+                </button>
               </div>
+            ) : (
+              <>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900">Cấu hình Bảng giá Động</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Thiết lập mức giá theo từng khung giờ và loại sân (Sân Tiêu Chuẩn hoặc Sân VIP).
+                  </p>
+                </div>
 
-              <div className="space-y-2.5">
-                {pricingRules.map((r) => (
-                  <div
-                    key={r.id}
-                    className="p-4 sm:p-5 border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:shadow-sm rounded-2xl flex justify-between items-center text-xs transition"
-                  >
-                    <div className="space-y-1">
-                      <span className="font-bold text-slate-800 text-sm">
-                        Sân <strong className="text-emerald-700">{r.court_type}</strong>: {formatTime24(r.start_time)} → {formatTime24(r.end_time)}
-                      </span>
-                      <div className="text-[11px] text-slate-400">Áp dụng tất cả các ngày trong tuần</div>
+                <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+                  <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                    <div>
+                      <h3 className="font-extrabold text-slate-900 text-base">
+                        Khung giá đang áp dụng ({pricingRules.length})
+                      </h3>
+                      <p className="text-xs text-slate-400">
+                        Biểu phí giờ chơi theo loại sân tiêu chuẩn và VIP
+                      </p>
                     </div>
-
-                    <div className="flex items-center gap-3">
-                      <strong className="text-emerald-700 text-base font-black">
-                        {Number(r.price_per_hour).toLocaleString()} ₫/h
-                      </strong>
-                      <button
-                        type="button"
-                        onClick={() => setEditingRule(r)}
-                        className="bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-slate-700 font-bold transition text-xs shadow-sm"
-                      >
-                        ✏️ Sửa
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeletePricingRule(r)}
-                        className="text-red-500 hover:bg-red-50 p-2 rounded-xl font-bold transition text-sm"
-                        title="Xóa khung giá"
-                      >
-                        ✕
-                      </button>
-                    </div>
+                    <ExpandableAddButton
+                      label="Thêm khung giá"
+                      onClick={() => setShowAddPricingModal(true)}
+                    />
                   </div>
-                ))}
-                {pricingRules.length === 0 && (
-                  <p className="text-xs text-slate-400 py-8 text-center">Chưa có khung giá nào được cài đặt.</p>
-                )}
-              </div>
-            </div>
+
+                  <div className="space-y-2.5">
+                    {pricingRules.map((r) => (
+                      <div
+                        key={r.id}
+                        className="p-4 sm:p-5 border border-slate-200/80 bg-slate-50/70 hover:bg-white hover:shadow-sm rounded-2xl flex justify-between items-center text-xs transition"
+                      >
+                        <div className="space-y-1">
+                          <span className="font-bold text-slate-800 text-sm">
+                            Sân <strong className="text-emerald-700">{r.court_type}</strong>: {formatTime24(r.start_time)} → {formatTime24(r.end_time)}
+                          </span>
+                          <div className="text-[11px] text-slate-400">Áp dụng tất cả các ngày trong tuần</div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <strong className="text-emerald-700 text-base font-black">
+                            {Number(r.price_per_hour).toLocaleString()} ₫/h
+                          </strong>
+                          <button
+                            type="button"
+                            onClick={() => setEditingRule(r)}
+                            className="bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-slate-700 font-bold transition text-xs shadow-sm"
+                          >
+                            ✏️ Sửa
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePricingRule(r)}
+                            className="text-red-500 hover:bg-red-50 p-2 rounded-xl font-bold transition text-sm"
+                            title="Xóa khung giá"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                    {pricingRules.length === 0 && (
+                      <p className="text-xs text-slate-400 py-8 text-center">Chưa có khung giá nào được cài đặt.</p>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
+
 
         {/* ========================================================= */}
         {/* TAB 4: KHO HÀNG POS (FULL-WIDTH + NÚT EXPANDABLE GÓC PHẢI) */}
@@ -1780,34 +2411,56 @@ export default function TenantDashboard() {
                   key: 'enable_vip_courts',
                   title: 'Sử dụng Sân VIP',
                   desc: 'Cho phép tạo và cấu hình giá riêng cho sân tiêu chuẩn VIP',
+                  locked: !hasPlan,
+                  lockMsg: 'Cần đăng ký gói cước',
                 },
                 {
                   key: 'enable_pos_module',
                   title: 'Module Bán hàng POS tại quầy',
                   desc: 'Quản lý tồn kho nước uống, cầu lông và tạo hóa đơn tại quầy lễ tân',
+                  locked: !canUsePos,
+                  lockMsg: 'Yêu cầu Gói Tiêu Chuẩn (199k) trở lên',
                 },
                 {
                   key: 'enable_advanced_analytics',
                   title: 'Báo cáo Thống kê Chuyên sâu',
                   desc: 'Phân tích chi tiết doanh thu theo từng sân và top mặt hàng bán chạy',
+                  locked: !canUsePos,
+                  lockMsg: 'Yêu cầu Gói Tiêu Chuẩn (199k) trở lên',
                 },
               ].map((toggle) => (
                 <label
                   key={toggle.key}
-                  className="flex items-center justify-between p-4 bg-slate-50 hover:bg-slate-100/70 rounded-2xl border border-slate-200/70 cursor-pointer transition"
+                  className={`flex items-center justify-between p-4 rounded-2xl border transition ${
+                    toggle.locked
+                      ? 'bg-slate-100/60 border-slate-200 cursor-not-allowed opacity-75'
+                      : 'bg-slate-50 hover:bg-slate-100/70 border-slate-200/70 cursor-pointer'
+                  }`}
                 >
                   <div className="pr-4">
-                    <div className="text-xs font-extrabold text-slate-800">{toggle.title}</div>
+                    <div className="text-xs font-extrabold text-slate-800 flex items-center gap-2">
+                      <span>{toggle.title}</span>
+                      {toggle.locked && (
+                        <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
+                          🔒 {toggle.lockMsg}
+                        </span>
+                      )}
+                    </div>
                     <div className="text-[11px] text-slate-500 mt-0.5">{toggle.desc}</div>
                   </div>
                   <input
                     type="checkbox"
-                    checked={Boolean(tenant[toggle.key])}
-                    onChange={(e) => setTenant({ ...tenant, [toggle.key]: e.target.checked })}
-                    className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500"
+                    disabled={toggle.locked}
+                    checked={toggle.locked ? false : Boolean(tenant[toggle.key])}
+                    onChange={(e) => {
+                      if (toggle.locked) return;
+                      setTenant({ ...tenant, [toggle.key]: e.target.checked });
+                    }}
+                    className="w-5 h-5 rounded text-emerald-600 focus:ring-emerald-500 disabled:opacity-40"
                   />
                 </label>
               ))}
+
 
               <div className="pt-4 border-t border-slate-100 space-y-3">
                 <h2 className="font-extrabold text-slate-900 text-base">Chính sách Ưu đãi Học sinh / Sinh viên</h2>
@@ -1939,20 +2592,37 @@ export default function TenantDashboard() {
               </div>
 
               {maintScheduleMode === 'SCHEDULE' && (
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Chọn ngày và giờ bắt đầu</label>
-                  <input
-                    type="datetime-local"
-                    required
-                    value={maintStartTime}
-                    onChange={(e) => setMaintStartTime(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl font-semibold"
-                  />
+                <div className="space-y-2">
+                  <label className="block font-bold text-slate-700">
+                    Chọn ngày và giờ bắt đầu (Định dạng 24 Giờ)
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="block text-[11px] text-slate-500 font-semibold mb-1">📅 Ngày bắt đầu</span>
+                      <input
+                        type="date"
+                        required
+                        value={maintStartDate}
+                        onChange={(e) => setMaintStartDate(e.target.value)}
+                        className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                      />
+                    </div>
+                    <div>
+                      <span className="block text-[11px] text-slate-500 font-semibold mb-1">🕒 Giờ bắt đầu (24H)</span>
+                      <TimeSelect24
+                        value={maintStartTime}
+                        onChange={(e) => setMaintStartTime(e.target.value)}
+                        className="w-full"
+                        required
+                      />
+                    </div>
+                  </div>
                   <p className="text-[11px] text-slate-400 mt-1">
-                    * Chỉ cần chọn giờ bắt đầu. Khi bảo trì xong, bạn chỉ cần bấm "Hoàn tất bảo trì" để mở lại sân.
+                    * Định dạng chuẩn 24H (VD: 07:00, 14:30, 21:00). Khi bảo trì xong, bạn chỉ cần bấm "Hoàn tất bảo trì" để mở lại sân.
                   </p>
                 </div>
               )}
+
 
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Lý do / Ghi chú bảo trì</label>
@@ -2809,6 +3479,277 @@ export default function TenantDashboard() {
                 ✓ Lưu thay đổi
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: ĐĂNG KÝ / THANH TOÁN GÓI CƯỚC SAAS */}
+      {/* ========================================================= */}
+      {checkoutModal.isOpen && checkoutModal.plan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-scale-up overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-4 my-8">
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl font-bold">
+                  ⚡
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    Đăng Ký {checkoutModal.plan.name}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Hạn mức tối đa:{' '}
+                    <strong>
+                      {Number(checkoutModal.plan.max_courts) >= 999
+                        ? 'Không giới hạn'
+                        : `${checkoutModal.plan.max_courts} sân`}
+                    </strong>{' '}
+                    • Hoa hồng app: <strong>{checkoutModal.plan.commission_rate}%</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCheckoutModal((prev) => ({ ...prev, isOpen: false }))}
+                className="text-slate-400 hover:text-slate-600 p-1 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitSubscriptionRequest} className="space-y-4">
+              {/* CHỌN CHU KỲ THANH TOÁN */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                  Chu kỳ thanh toán & Ưu đãi:
+                </label>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCheckoutModal((prev) => ({ ...prev, billingCycle: 'MONTHLY' }))
+                    }
+                    className={`p-3 rounded-2xl border text-center transition font-bold ${
+                      checkoutModal.billingCycle === 'MONTHLY'
+                        ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div>1 Tháng</div>
+                    <div className="text-xs font-black text-slate-900 mt-1">
+                      {Number(checkoutModal.plan.price_per_month).toLocaleString()} ₫
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-normal">Giá chuẩn</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCheckoutModal((prev) => ({ ...prev, billingCycle: '6_MONTHS' }))
+                    }
+                    className={`p-3 rounded-2xl border text-center transition font-bold relative ${
+                      checkoutModal.billingCycle === '6_MONTHS'
+                        ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-500 text-white text-[9px] font-black uppercase px-2 py-0.2 rounded-full whitespace-nowrap shadow-xs">
+                      Giảm 10%
+                    </span>
+                    <div>6 Tháng</div>
+                    <div className="text-xs font-black text-slate-900 mt-1">
+                      {Math.round(
+                        Number(checkoutModal.plan.price_per_month) * 6 * 0.9
+                      ).toLocaleString()}{' '}
+                      ₫
+                    </div>
+                    <div className="text-[10px] text-emerald-600 font-semibold">
+                      Tiết kiệm 10%
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCheckoutModal((prev) => ({ ...prev, billingCycle: 'YEARLY' }))
+                    }
+                    className={`p-3 rounded-2xl border text-center transition font-bold relative ${
+                      checkoutModal.billingCycle === 'YEARLY'
+                        ? 'border-indigo-600 bg-indigo-50/70 text-indigo-900 ring-2 ring-indigo-500/20'
+                        : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-emerald-600 text-white text-[9px] font-black uppercase px-2 py-0.2 rounded-full whitespace-nowrap shadow-xs">
+                      Giảm 20%
+                    </span>
+                    <div>1 Năm (12T)</div>
+                    <div className="text-xs font-black text-slate-900 mt-1">
+                      {Math.round(
+                        Number(checkoutModal.plan.price_per_month) * 12 * 0.8
+                      ).toLocaleString()}{' '}
+                      ₫
+                    </div>
+                    <div className="text-[10px] text-emerald-600 font-semibold">
+                      Tiết kiệm 20%
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              {/* SỐ TIỀN CẦN THANH TOÁN & THÔNG TIN VIETQR */}
+              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 space-y-3">
+                  <div className="flex justify-between items-center pb-2 border-b border-slate-200">
+                    <span className="text-xs font-bold text-slate-600">Số tiền chuyển khoản:</span>
+                    <span className="text-base font-black text-emerald-700">
+                      {calculateTotalAmount(
+                        checkoutModal.plan,
+                        checkoutModal.billingCycle
+                      ).toLocaleString()}{' '}
+                      ₫
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4">
+                    <div className="shrink-0 bg-white p-2 rounded-2xl border border-slate-200 shadow-sm text-center">
+                      <img
+                        src={`https://img.vietqr.io/image/MB-0987654321-compact2.png?amount=${calculateTotalAmount(
+                          checkoutModal.plan,
+                          checkoutModal.billingCycle
+                        )}&addInfo=${encodeURIComponent(
+                          `GOI_${checkoutModal.plan.name.slice(0, 10).replace(/\s+/g, '_')}_${tenant.name.slice(0, 8).replace(/\s+/g, '_')}`
+                        )}`}
+                        alt="VietQR Platform"
+                        className="w-32 h-32 object-contain mx-auto"
+                      />
+                      <span className="text-[10px] font-bold text-slate-400 block mt-1">Quét mã VietQR</span>
+                    </div>
+
+                    <div className="text-xs space-y-1.5 text-slate-700 flex-1">
+                      <div>Ngân hàng: <strong className="text-slate-900">MB Bank (Quân Đội)</strong></div>
+                      <div>Số tài khoản: <strong className="font-mono text-slate-900 text-sm bg-white px-2 py-0.5 rounded border border-slate-200">0987654321</strong></div>
+                      <div>Chủ tài khoản: <strong className="text-slate-900">PLATFORM SUPER ADMIN</strong></div>
+                      <div>Nội dung CK: <strong className="font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">GOI {checkoutModal.plan.name.slice(0, 10)} {tenant.name.slice(0, 8)}</strong></div>
+                    </div>
+                  </div>
+
+                  {/* NHẬP MÃ GIAO DỊCH */}
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <div>
+                      <label className="text-xs font-bold text-slate-800">
+                        Mã giao dịch VietQR / Chuyển khoản <span className="text-red-500">*</span>:
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={checkoutModal.transactionCode}
+                        onChange={(e) =>
+                          setCheckoutModal((prev) => ({
+                            ...prev,
+                            transactionCode: e.target.value,
+                          }))
+                        }
+                        placeholder="Ví dụ: MB123456789 hoặc FT2610..."
+                        className="w-full mt-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-bold text-slate-700">Ghi chú chuyển khoản (Tùy chọn):</label>
+                      <input
+                        type="text"
+                        value={checkoutModal.paymentProofNote}
+                        onChange={(e) =>
+                          setCheckoutModal((prev) => ({
+                            ...prev,
+                            paymentProofNote: e.target.value,
+                          }))
+                        }
+                        placeholder="Ví dụ: Đã chuyển khoản từ app Techcombank..."
+                        className="w-full mt-1 p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+              {/* THÔNG TIN TÀI KHOẢN NHẬN HOÀN TIỀN (NẾU TỪ CHỐI) */}
+              <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 space-y-2 text-xs">
+                <div className="flex items-center gap-1.5 text-amber-900 font-black uppercase text-[11px] tracking-wider">
+                  <span>🛡️</span>
+                  <span>Tài khoản nhận Hoàn tiền (Nếu không được duyệt)</span>
+                </div>
+                <p className="text-[11px] text-amber-800 leading-relaxed">
+                  Trường hợp yêu cầu không được duyệt, Super Admin sẽ hoàn trả 100% số tiền về tài khoản ngân hàng này (tương tự chính sách hủy sân hoàn tiền trước 24h).
+                </p>
+
+                <div className="grid sm:grid-cols-3 gap-2 pt-1">
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">Ngân hàng:</label>
+                    <input
+                      type="text"
+                      required
+                      value={checkoutModal.refundBankName}
+                      onChange={(e) =>
+                        setCheckoutModal((prev) => ({
+                          ...prev,
+                          refundBankName: e.target.value,
+                        }))
+                      }
+                      placeholder="VD: Vietcombank, MB..."
+                      className="w-full mt-1 p-2 bg-white border border-amber-200 rounded-xl text-xs focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">Số tài khoản:</label>
+                    <input
+                      type="text"
+                      required
+                      value={checkoutModal.refundAccountNumber}
+                      onChange={(e) =>
+                        setCheckoutModal((prev) => ({
+                          ...prev,
+                          refundAccountNumber: e.target.value,
+                        }))
+                      }
+                      placeholder="Số tài khoản"
+                      className="w-full mt-1 p-2 bg-white border border-amber-200 rounded-xl text-xs font-mono focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-slate-700">Tên chủ tài khoản:</label>
+                    <input
+                      type="text"
+                      required
+                      value={checkoutModal.refundAccountName}
+                      onChange={(e) =>
+                        setCheckoutModal((prev) => ({
+                          ...prev,
+                          refundAccountName: e.target.value.toUpperCase(),
+                        }))
+                      }
+                      placeholder="NGUYEN VAN A"
+                      className="w-full mt-1 p-2 bg-white border border-amber-200 rounded-xl text-xs uppercase focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setCheckoutModal((prev) => ({ ...prev, isOpen: false }))}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
+                >
+                  Hủy bỏ
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-md active:scale-95 flex items-center gap-1.5"
+                >
+                  <span>✓</span>
+                  <span>Xác nhận & Gửi yêu cầu duyệt</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

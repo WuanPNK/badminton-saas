@@ -1,4 +1,6 @@
 const db = require('../../config/db');
+const { sendBookingTicketEmail } = require('../../config/mailer');
+const { notifyBookingUpdate } = require('../../config/socket');
 
 // 1. LẤY THÔNG TIN THANH TOÁN & SINH MÃ VIETQR ĐỘNG CHO ĐƠN ĐẶT SÂN
 exports.getBookingPaymentInfo = async (req, res) => {
@@ -75,10 +77,59 @@ exports.mockConfirmPayment = async (req, res) => {
       });
     }
 
+    const confirmedBooking = result.rows[0];
+
+    // Phát sự kiện cập nhật thời gian thực qua Socket.io
+    notifyBookingUpdate(confirmedBooking.tenant_id, {
+      type: 'BOOKING_CONFIRMED',
+      booking: confirmedBooking,
+      date: confirmedBooking.booking_date,
+      courtId: confirmedBooking.court_id,
+    });
+
+    // Lấy thông tin chi tiết cụm sân, sân đấu và khách hàng để gửi Email vé đặt kèm QR Code
+    (async () => {
+      try {
+        const detailRes = await db.query(
+          `SELECT b.*,
+                  u.full_name AS customer_name, u.email AS customer_email,
+                  t.name AS tenant_name, t.address AS tenant_address, t.district AS tenant_district, t.phone_contact,
+                  c.name AS court_name, c.type AS court_type
+           FROM bookings b
+           JOIN users u ON b.user_id = u.id
+           JOIN tenants t ON b.tenant_id = t.id
+           JOIN courts c ON b.court_id = c.id
+           WHERE b.id = $1`,
+          [confirmedBooking.id]
+        );
+
+        if (detailRes.rows.length > 0) {
+          const d = detailRes.rows[0];
+          await sendBookingTicketEmail({
+            toEmail: d.customer_email,
+            customerName: d.customer_name,
+            booking: d,
+            tenant: {
+              name: d.tenant_name,
+              address: d.tenant_address,
+              district: d.tenant_district,
+              phone_contact: d.phone_contact,
+            },
+            court: {
+              name: d.court_name,
+              type: d.court_type,
+            },
+          });
+        }
+      } catch (emailErr) {
+        console.error('[EMAIL ERROR] Lỗi khi tạo vé gửi email sau thanh toán:', emailErr);
+      }
+    })();
+
     res.json({
       success: true,
-      message: 'Thanh toán 100% thành công! Lịch đặt sân của bạn đã được xác nhận (CONFIRMED).',
-      booking: result.rows[0]
+      message: 'Thanh toán 100% thành công! Lịch đặt sân của bạn đã được xác nhận (CONFIRMED) và vé QR đã được gửi về email của bạn.',
+      booking: confirmedBooking
     });
   } catch (error) {
     console.error(error);
@@ -139,10 +190,20 @@ exports.cancelBookingRequestRefund = async (req, res) => {
       [refundBankName, refundAccountNumber, refundAccountName, bookingId]
     );
 
+    const cancelledBooking = updateRes.rows[0];
+
+    // Phát sự kiện cập nhật thời gian thực qua Socket.io
+    notifyBookingUpdate(cancelledBooking.tenant_id, {
+      type: 'BOOKING_CANCELLED',
+      booking: cancelledBooking,
+      date: cancelledBooking.booking_date,
+      courtId: cancelledBooking.court_id,
+    });
+
     res.json({
       success: true,
       message: 'Đã hủy lịch hợp lệ (trước 24h). Yêu cầu hoàn 100% tiền đã được gửi tới Lễ tân cụm sân!',
-      booking: updateRes.rows[0]
+      booking: cancelledBooking
     });
   } catch (error) {
     console.error(error);

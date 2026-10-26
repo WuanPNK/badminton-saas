@@ -41,7 +41,10 @@ export default function AuthPage() {
   useEffect(() => {
     if (user) {
       if (user.role === 'SUPER_ADMIN') navigate('/super-admin');
-      else if (user.role === 'TENANT_ADMIN') navigate('/tenant');
+      else if (user.role === 'TENANT_ADMIN') {
+        if (user.tenantStatus === 'PENDING') navigate('/tenant-pending');
+        else navigate('/tenant');
+      }
       else if (user.role === 'STAFF') navigate('/staff');
       else navigate('/');
     }
@@ -69,7 +72,7 @@ export default function AuthPage() {
     const { name, value, type, checked } = e.target;
     setForm((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value,
+      [name]: type === 'checkbox' ? checked : (name === 'otpCode' ? value.trim() : value),
     }));
   };
 
@@ -126,6 +129,7 @@ export default function AuthPage() {
       });
       setOtpSent(true);
       setOtpCountdown(60); // Bắt đầu đếm ngược 60s
+      setForm((prev) => ({ ...prev, otpCode: '' })); // Tự động xóa mã cũ để người dùng nhập đúng mã mới nhất
       setMessage({ type: 'success', text: res.data.message });
     } catch (err) {
       setMessage({
@@ -231,10 +235,16 @@ export default function AuthPage() {
       const { token, user } = res.data;
       login(user, token);
 
-      if (user.role === 'SUPER_ADMIN') navigate('/super-admin');
-      else if (user.role === 'TENANT_ADMIN') navigate('/tenant');
-      else if (user.role === 'STAFF') navigate('/staff');
-      else navigate('/');
+      if (user.role === 'SUPER_ADMIN') {
+        navigate('/super-admin');
+      } else if (user.role === 'TENANT_ADMIN') {
+        if (user.tenantStatus === 'PENDING') navigate('/tenant-pending');
+        else navigate('/tenant');
+      } else if (user.role === 'STAFF') {
+        navigate('/staff');
+      } else {
+        navigate('/');
+      }
     } catch (err) {
       setMessage({
         type: 'error',

@@ -37,4 +37,13 @@ router.put(
   bookingController.updateBookingOperationStatus
 );
 
-module.exports = router;
+// Lễ tân quét hoặc nhập mã QR check-in nhanh 1 giây
+router.post(
+  '/quick-check-in',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN', 'STAFF'),
+  verifyActiveTenant,
+  bookingController.quickCheckIn
+);
+
+module.exports = router;

@@ -20,5 +20,8 @@ router.delete('/plans/:id', superAdminController.deletePlan);
 router.get('/dashboard', superAdminController.getPlatformDashboard);
 router.get('/revenue-export', superAdminController.getSuperAdminRevenueExport);
 router.post('/subscriptions/record', superAdminController.recordTenantSubscription);
+router.get('/subscriptions/pending', superAdminController.getPendingSubscriptions);
+router.put('/subscriptions/:id/approve', superAdminController.approveSubscription);
+router.put('/subscriptions/:id/reject', superAdminController.rejectSubscription);
 
 module.exports = router;

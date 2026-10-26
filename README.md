@@ -61,11 +61,13 @@ Dưới đây là danh sách các tài khoản mẫu đã được khởi tạo 
 
 | Vai trò | Email đăng nhập | Mật khẩu | Chức năng nổi bật để chấm điểm |
 | :--- | :--- | :---: | :--- |
-| **👑 Super Admin** | `superadmin@badminton.vn` | `123456` | Duyệt đối tác cụm sân mới, duyệt ảnh thẻ HSSV, gia hạn gói cước đối tác. |
-| **🏟️ Chủ sân (Tenant Admin)** | `tenant1_owner@badminton.vn` | `123456` | Cấu hình bảng giá theo giờ vàng, thiết lập mức giảm HSSV (-20%), quản lý sân, tạo tài khoản lễ tân, thống kê doanh thu. |
-| **🧑‍💼 Lễ tân (Staff)** | `staff1@badminton.vn` | `123456` | Check-in ca chơi, tạo đơn đặt lịch cho khách vãng lai, bán nước giải khát POS, duyệt hoàn tiền 100% khi khách hủy lịch. |
-| **🎓 Khách hàng HSSV** | `student1@badminton.vn` | `123456` | Tài khoản đã được phê duyệt thẻ Sinh viên, hệ thống tự động áp dụng chiết khấu khi đặt lịch. |
-| **🏸 Khách hàng thường** | `user1@badminton.vn` | `123456` | Đặt lịch trực quan theo ô 30 phút, thanh toán VietQR, hủy lịch hoàn tiền, viết nhận xét & chấm sao sân. |
+| **👑 Super Admin** | `superadmin@saas.com` | `123456` | Duyệt đối tác cụm sân mới, duyệt yêu cầu gói cước SaaS, duyệt ảnh thẻ HSSV, xem doanh thu sàn. |
+| **🏟️ Chủ sân Đông Đô (Standard)** | `chusan1@gmail.com` | `123456` | Gói Tiêu chuẩn (16 sân): Đầy đủ Bảng giá động giờ vàng, công tắc POS quầy nước, quản lý sân con & lễ tân. |
+| **🏟️ Chủ sân Thái Hà (Starter)** | `chusan2@gmail.com` | `123456` | Gói Khởi nghiệp (8 sân): Quản lý sân con, giới hạn tính năng theo gói Starter. |
+| **🏟️ Chủ sân Vũ Trọng Phụng (Pending)** | `chusan3@gmail.com` | `123456` | Tài khoản cụm sân chưa mua gói cước: Trải nghiệm luồng đăng ký gói cước và bị chặn tạo sân khi chưa có gói. |
+| **🧑‍💼 Lễ tân (Staff)** | `letan1@gmail.com` | `123456` | Quản lý ca sân (chỉ check-in trong khung giờ [bắt đầu - 15p đến hết giờ]), bán đồ uống POS, duyệt hoàn tiền 100%. |
+| **🎓 Khách hàng HSSV** | `sinhvien@gmail.com` | `123456` | Tài khoản đã được phê duyệt thẻ Sinh viên, hệ thống tự động áp dụng chiết khấu khi đặt lịch. |
+| **🏸 Khách hàng thường** | `khach@gmail.com` | `123456` | Đặt lịch trực quan theo ô 30 phút, thanh toán VietQR, hủy lịch trước 24h hoàn tiền 100%, viết đánh giá sau khi check-in. |
 
 ---
 

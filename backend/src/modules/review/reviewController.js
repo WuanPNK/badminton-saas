@@ -12,9 +12,9 @@ exports.createReview = async (req, res) => {
   }
 
   try {
-    // Kiểm tra đơn hàng có thuộc về khách này và đã COMPLETED chưa
+    // Kiểm tra đơn hàng có thuộc về khách này, đã hoàn tất và ĐÃ CHECK-IN
     const bookingRes = await db.query(
-      `SELECT id, tenant_id, user_id, status
+      `SELECT id, tenant_id, user_id, status, end_time, is_checked_in, checked_in_at
        FROM bookings
        WHERE id = $1 AND user_id = $2`,
       [bookingId, userId]
@@ -28,9 +28,18 @@ exports.createReview = async (req, res) => {
 
     const booking = bookingRes.rows[0];
 
-    if (booking.status !== 'COMPLETED') {
+    // Kiểm tra ca chơi đã kết thúc chưa
+    const isPastEndTime = new Date(booking.end_time) <= new Date();
+    if (booking.status !== 'COMPLETED' && !isPastEndTime) {
       return res.status(403).json({
-        message: 'Chỉ những lịch đặt sân đã thanh toán và hoàn tất ca chơi (COMPLETED) mới được phép đánh giá!'
+        message: 'Ca chơi của bạn chưa hoàn tất. Vui lòng quay lại đánh giá sau khi ca chơi kết thúc!'
+      });
+    }
+
+    // ĐIỀU KIỆN QUAN TRỌNG: Khách phải thực tế đến sân Check-in thì mới được viết đánh giá!
+    if (!booking.is_checked_in && !booking.checked_in_at) {
+      return res.status(403).json({
+        message: 'Bạn chỉ có thể đánh giá cụm sân khi đã thực tế đến sân check-in ca chơi này.'
       });
     }
 

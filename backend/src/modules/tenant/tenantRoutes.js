@@ -8,6 +8,36 @@ const { verifyActiveTenant } = require('../../middlewares/tenantMiddleware');
 router.get('/marketplace', tenantController.getMarketplaceTenants);
 router.get('/marketplace/:id', tenantController.getTenantPublicDetail);
 
+// --- ROUTE KIỂM TRA TRẠNG THÁI CHỜ DUYỆT CỦA CHỦ SÂN (Không yêu cầu verifyActiveTenant) ---
+router.get(
+  '/pending-status',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  tenantController.getPendingTenantStatus
+);
+
+// --- ROUTES ĐĂNG KÝ & QUẢN LÝ GÓI CƯỚC SAAS CỦA CHỦ SÂN ---
+router.get(
+  '/subscription/plans',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  tenantController.getSubscriptionPlans
+);
+
+router.get(
+  '/subscription/my-subscription',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  tenantController.getMySubscription
+);
+
+router.post(
+  '/subscription/request',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN'),
+  tenantController.requestSubscription
+);
+
 // --- ROUTES DÀNH CHO CHỦ SÂN & LỄ TÂN XEM CẤU HÌNH ---
 router.get(
   '/my-settings',

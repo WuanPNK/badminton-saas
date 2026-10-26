@@ -36,7 +36,15 @@ app.get('/health', (req, res) => {
   });
 });
 
+const http = require('http');
+const { initSocket } = require('./config/socket');
+const { cleanupExpiredPendingTenants } = require('./utils/cleanup');
+
+const server = http.createServer(app);
+initSocket(server);
+
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`Server đang lắng nghe tại cổng http://localhost:${PORT}`);
+  cleanupExpiredPendingTenants();
 });

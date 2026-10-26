@@ -59,6 +59,7 @@ export default function SuperAdminDashboard() {
     pendingTenants: [],
     pendingCourts: [],
     pendingStudents: [],
+    pendingSubscriptions: [],
   });
   const [dashboard, setDashboard] = useState({
     saasRevenue: { total_saas_revenue: 0, total_subscriptions: 0, average_deal: 0, this_month_revenue: 0 },
@@ -141,6 +142,14 @@ export default function SuperAdminDashboard() {
   const [searchTenant, setSearchTenant] = useState('');
   const [searchCourt, setSearchCourt] = useState('');
   const [searchStudent, setSearchStudent] = useState('');
+  const [searchSub, setSearchSub] = useState('');
+
+  // Modal Từ chối & Hoàn tiền Gói cước
+  const [rejectSubModal, setRejectSubModal] = useState({
+    isOpen: false,
+    sub: null,
+    reason: '',
+  });
 
   // Tải dữ liệu toàn diện
   const fetchAllData = async () => {
@@ -230,6 +239,48 @@ export default function SuperAdminDashboard() {
         }
       },
     });
+  };
+
+  // --- XỬ LÝ DUYỆT GÓI CƯỚC SAAS & HOÀN TIỀN ---
+  const handleApproveSubscription = (sub) => {
+    askConfirm({
+      title: 'Phê Duyệt Gói Cước SaaS',
+      message: `Xác nhận phê duyệt và kích hoạt gói "${sub.plan_name}" cho cụm sân "${sub.tenant_name}"? Số tiền đã thanh toán: ${Number(sub.amount_paid).toLocaleString()} ₫ (Mã GD: ${sub.transaction_code || 'N/A'}).`,
+      confirmText: '✓ Duyệt & Kích hoạt',
+      confirmColor: 'emerald',
+      icon: '⚡',
+      onConfirm: async () => {
+        try {
+          const res = await axiosClient.put(`/super-admin/subscriptions/${sub.id}/approve`);
+          toast.success(res.data.message);
+          fetchAllData();
+        } catch (err) {
+          toast.error(err.response?.data?.message || 'Lỗi khi phê duyệt gói cước.');
+        }
+      },
+    });
+  };
+
+  const handleOpenRejectSub = (sub) => {
+    setRejectSubModal({
+      isOpen: true,
+      sub,
+      reason: 'Thông tin đối soát giao dịch thanh toán không khớp với tài khoản ngân hàng.',
+    });
+  };
+
+  const handleConfirmRejectSub = async () => {
+    if (!rejectSubModal.sub) return;
+    try {
+      const res = await axiosClient.put(`/super-admin/subscriptions/${rejectSubModal.sub.id}/reject`, {
+        rejectionReason: rejectSubModal.reason,
+      });
+      toast.success(res.data.message);
+      setRejectSubModal({ isOpen: false, sub: null, reason: '' });
+      fetchAllData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi từ chối gói cước.');
+    }
   };
 
   // --- CÁC HÀM XỬ LÝ GÓI CƯỚC SAAS ---
@@ -358,6 +409,11 @@ export default function SuperAdminDashboard() {
   // Danh mục tab điều hướng phía trên (Đã loại bỏ tab Hub trùng lặp, dùng nút Back ở Header)
   const TAB_ITEMS = [
     {
+      id: 'SUBSCRIPTIONS',
+      label: `⚡ Duyệt Gói Cước (${approvals.pendingSubscriptions?.length || 0})`,
+      badge: approvals.pendingSubscriptions?.length || 0,
+    },
+    {
       id: 'TENANTS',
       label: `🏟️ Duyệt Chủ Sân (${approvals.pendingTenants.length})`,
       badge: approvals.pendingTenants.length,
@@ -474,7 +530,8 @@ export default function SuperAdminDashboard() {
                   <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 flex items-center gap-2">
                     <span className="text-amber-400">⏳ Đang Chờ Duyệt:</span>
                     <span className="text-white font-black text-sm">
-                      {approvals.pendingTenants.length +
+                      {(approvals.pendingSubscriptions?.length || 0) +
+                        approvals.pendingTenants.length +
                         approvals.pendingCourts.length +
                         approvals.pendingStudents.length}{' '}
                       hồ sơ
@@ -496,6 +553,38 @@ export default function SuperAdminDashboard() {
 
             {/* LƯỚI CARD CHỨC NĂNG (GIAO DIỆN DỊU MẮT, RÕ RÀNG, CHUYÊN NGHIỆP) */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {/* CARD 0: DUYỆT GÓI CƯỚC SAAS CHỦ SÂN */}
+              <div
+                onClick={() => setTab('SUBSCRIPTIONS')}
+                className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
+              >
+                <div className="flex justify-between items-start">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl shadow-sm">
+                    ⚡
+                  </div>
+                  <span
+                    className={`text-[11px] font-black px-3 py-1 rounded-full ${
+                      (approvals.pendingSubscriptions?.length || 0) > 0
+                        ? 'bg-amber-100 text-amber-900 border border-amber-300 animate-pulse'
+                        : 'bg-slate-100 text-slate-700 border border-slate-200'
+                    }`}
+                  >
+                    {approvals.pendingSubscriptions?.length || 0} Đơn chờ duyệt
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900 group-hover:text-indigo-700 transition-colors tracking-tight">
+                    Duyệt Gói Cước Chủ Sân
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed font-medium">
+                    Chủ sân chọn gói và thanh toán VietQR. Phê duyệt để kích hoạt hoặc từ chối để hoàn tiền tự động
+                  </p>
+                </div>
+                <div className="text-[11px] font-bold text-slate-400 group-hover:text-indigo-600 pt-2 border-t border-slate-100 flex justify-between items-center transition-colors">
+                  <span>Xử lý yêu cầu gói cước</span>
+                  <span className="group-hover:translate-x-1 transition-transform">→</span>
+                </div>
+              </div>
               {/* CARD 1: DUYỆT HỒ SƠ CHỦ SÂN */}
               <div
                 onClick={() => setTab('TENANTS')}
@@ -657,6 +746,167 @@ export default function SuperAdminDashboard() {
                   <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* TAB 1.5: DUYỆT YÊU CẦU GÓI CƯỚC SAAS CỦA CHỦ SÂN */}
+        {/* ========================================================= */}
+        {tab === 'SUBSCRIPTIONS' && (
+          <div className="space-y-6">
+            <div className="flex flex-wrap justify-between items-center gap-3">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">
+                  Duyệt Yêu Cầu Đăng Ký & Gia Hạn Gói Cước SaaS
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Chủ sân tự chọn gói cước và thanh toán VietQR. Super Admin phê duyệt để kích hoạt hoặc từ chối để hoàn tiền 100% về tài khoản của chủ sân.
+                </p>
+              </div>
+
+              <div className="w-full sm:w-72">
+                <input
+                  type="text"
+                  placeholder="Tìm theo tên sân, chủ sân, mã GD..."
+                  value={searchSub}
+                  onChange={(e) => setSearchSub(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500"
+                />
+              </div>
+            </div>
+
+            <div className="bg-white p-6 sm:p-7 rounded-3xl shadow-sm border border-slate-100 space-y-4">
+              <div className="flex justify-between items-center pb-3 border-b border-slate-100">
+                <h3 className="font-extrabold text-slate-900 text-base">
+                  Yêu Cầu Chờ Phê Duyệt ({approvals.pendingSubscriptions?.length || 0})
+                </h3>
+              </div>
+
+              {(!approvals.pendingSubscriptions || approvals.pendingSubscriptions.length === 0) ? (
+                <div className="py-12 text-center text-slate-400 text-xs">
+                  <div className="text-4xl mb-2">🎉</div>
+                  Hiện không có yêu cầu gói cước nào đang chờ duyệt.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {approvals.pendingSubscriptions
+                    .filter((s) => {
+                      if (!searchSub.trim()) return true;
+                      const q = searchSub.toLowerCase();
+                      return (
+                        s.tenant_name?.toLowerCase().includes(q) ||
+                        s.owner_name?.toLowerCase().includes(q) ||
+                        s.plan_name?.toLowerCase().includes(q) ||
+                        s.transaction_code?.toLowerCase().includes(q)
+                      );
+                    })
+                    .map((s) => (
+                      <div
+                        key={s.id}
+                        className="p-5 border border-slate-200/90 bg-slate-50/70 hover:bg-white hover:shadow-md rounded-3xl flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5 transition-all"
+                      >
+                        <div className="space-y-2 text-xs flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-black text-slate-900">{s.tenant_name}</span>
+                            <span className="bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                              Quận {s.district}
+                            </span>
+                            <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold animate-pulse">
+                              ⏳ Chờ phê duyệt thanh toán
+                            </span>
+                            {s.tenant_status === 'PENDING' && (
+                              <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                🏟️ Cụm sân mới
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="text-slate-600">
+                            Chủ sân: <strong className="text-slate-900">{s.owner_name}</strong> • Email:{' '}
+                            <strong className="text-slate-800">{s.owner_email}</strong> • Hotline:{' '}
+                            <strong className="text-slate-900">{s.phone_contact || s.owner_phone}</strong>
+                          </div>
+
+                          <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 space-y-1.5 shadow-xs">
+                              <div className="text-[10px] font-black uppercase text-indigo-600 tracking-wider">
+                                Thông tin Gói Cước
+                              </div>
+                              <div className="text-xs font-bold text-slate-900">{s.plan_name}</div>
+                              <div className="text-[11px] text-slate-500">
+                                Quy mô: <strong>{Number(s.max_courts) >= 999 ? 'Không giới hạn' : `${s.max_courts} sân con`}</strong> • Chu kỳ:{' '}
+                                <strong className="text-indigo-700">
+                                  {s.billing_cycle === 'YEARLY'
+                                    ? '1 Năm (Giảm 20%)'
+                                    : s.billing_cycle === '6_MONTHS'
+                                    ? '6 Tháng (Giảm 10%)'
+                                    : Number(s.amount_paid) === 0
+                                    ? 'Dùng thử 14 ngày'
+                                    : '1 Tháng'}
+                                </strong>
+                              </div>
+                              <div className="text-emerald-700 font-black text-sm pt-0.5">
+                                Số tiền: {Number(s.amount_paid).toLocaleString()} ₫
+                              </div>
+                              {s.transaction_code && (
+                                <div className="text-[11px] font-mono text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200 inline-block">
+                                  Mã GD: <strong>{s.transaction_code}</strong>
+                                </div>
+                              )}
+                              {s.payment_proof_note && (
+                                <div className="text-[11px] text-slate-500 italic">
+                                  "{s.payment_proof_note}"
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/80 space-y-1.5 shadow-xs">
+                              <div className="text-[10px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1">
+                                <span>🛡️</span>
+                                <span>Tài Khoản Hoàn Tiền (Nếu từ chối)</span>
+                              </div>
+                              <div className="text-xs text-slate-700">
+                                Ngân hàng: <strong className="text-slate-900">{s.refund_bank_name || 'Chưa cung cấp'}</strong>
+                              </div>
+                              <div className="text-xs text-slate-700">
+                                Số tài khoản:{' '}
+                                <strong className="font-mono text-slate-900 text-sm bg-white px-2 py-0.5 rounded border border-amber-200">
+                                  {s.refund_account_number || 'N/A'}
+                                </strong>
+                              </div>
+                              <div className="text-xs text-slate-700">
+                                Chủ tài khoản: <strong className="text-slate-900">{s.refund_account_name || 'N/A'}</strong>
+                              </div>
+                              <div className="text-[10px] text-amber-800 font-semibold pt-0.5">
+                                Hoàn lại 100% ({Number(s.amount_paid).toLocaleString()} ₫) nếu không duyệt
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex sm:flex-col gap-2 w-full lg:w-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleApproveSubscription(s)}
+                            className="flex-1 lg:flex-initial bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-1.5"
+                          >
+                            <span>✓</span>
+                            <span>Phê duyệt kích hoạt</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRejectSub(s)}
+                            className="flex-1 lg:flex-initial bg-red-600 hover:bg-red-700 active:scale-95 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                          >
+                            <span>✕</span>
+                            <span>Từ chối & Hoàn tiền</span>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1014,7 +1264,7 @@ export default function SuperAdminDashboard() {
                     Cơ Chế Định Giá Kết Hợp: Phần Mềm Quản Lý Sân + Sàn Đặt Lịch Trực Tuyến
                   </span>
                 </div>
-                <span className="text-[11px] text-emerald-400 font-bold">14 Ngày Dùng Thử Miễn Phí Full Tính Năng</span>
+                <span className="text-[11px] text-emerald-400 font-bold">3 Gói Cước SaaS Chuyên Nghiệp</span>
               </div>
 
               <div className="grid md:grid-cols-3 gap-4 pt-1 text-xs">
@@ -1023,8 +1273,8 @@ export default function SuperAdminDashboard() {
                     <span>1. Phí thuê bao định kỳ (SaaS)</span>
                   </div>
                   <p className="text-slate-300 leading-relaxed text-[11px]">
-                    • <strong>Dùng thử:</strong> Miễn phí 14 ngày (mở full tính năng để trải nghiệm).<br />
-                    • <strong>Phí thuê bao:</strong> Dao động khoảng <strong>99.000 – 299.000 ₫/tháng</strong> (hoặc tính theo số lượng sân: ~30.000 – 50.000 ₫/sân/tháng).
+                    • <strong>Đăng ký gói trước khi tạo sân:</strong> Chủ sân chọn gói và được duyệt để khởi tạo sân.<br />
+                    • <strong>Phí thuê bao:</strong> Dao động từ <strong>99.000 – 299.000 ₫/tháng</strong> (giảm 10% khi đóng 6 tháng, 20% khi đóng 1 năm).
                   </p>
                 </div>
 
@@ -1034,7 +1284,7 @@ export default function SuperAdminDashboard() {
                   </div>
                   <p className="text-slate-300 leading-relaxed text-[11px]">
                     • <strong>Khách đặt trực tiếp qua App:</strong> Áp dụng mức chiết khấu <strong>0% – 5%</strong> giá trị đơn đặt thành công.<br />
-                    • Miễn phí 100% hoa hồng (0%) nếu chủ sân đã trả gói thuê bao phần mềm cố định VIP.
+                    • Miễn phí 100% hoa hồng (0%) nếu chủ sân sử dụng Gói Chuỗi Sân VIP.
                   </p>
                 </div>
 
@@ -1050,16 +1300,14 @@ export default function SuperAdminDashboard() {
               </div>
             </div>
 
-            {/* DANH SÁCH CÁC GÓI CƯỚC HIỆN TẠI (GRID 4 CỘT HIỆN ĐẠI) */}
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-5">
+            {/* DANH SÁCH CÁC GÓI CƯỚC HIỆN TẠI (GRID 3 CỘT CHUYÊN NGHIỆP) */}
+            <div className="grid md:grid-cols-3 gap-6">
               {plans.map((p) => {
                 const planFeatures = Array.isArray(p.features)
                   ? p.features
                   : typeof p.features === 'string'
                   ? JSON.parse(p.features)
                   : [];
-
-                const isFree = Number(p.price_per_month) === 0;
 
                 return (
                   <div
@@ -1099,21 +1347,15 @@ export default function SuperAdminDashboard() {
                             {Number(p.price_per_month).toLocaleString()} ₫
                           </span>
                           <span className="text-xs text-slate-400 font-bold">
-                            {isFree ? '/ 14 ngày' : '/ tháng'}
+                            / tháng
                           </span>
                         </div>
 
-                        {!isFree ? (
-                          <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-2">
-                            <span>Giảm 10% (6 tháng)</span>
-                            <span>•</span>
-                            <span>Giảm 20% (1 năm)</span>
-                          </div>
-                        ) : (
-                          <div className="text-[11px] text-amber-600 font-bold mt-1.5">
-                            Trải nghiệm đầy đủ tính năng
-                          </div>
-                        )}
+                        <div className="text-[11px] text-emerald-600 font-bold mt-1.5 flex items-center gap-2">
+                          <span>Giảm 10% (6 tháng)</span>
+                          <span>•</span>
+                          <span>Giảm 20% (1 năm)</span>
+                        </div>
                       </div>
 
                       {/* Giới hạn & Tính năng */}
@@ -1766,6 +2008,76 @@ export default function SuperAdminDashboard() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================= */}
+      {/* MODAL: TỪ CHỐI & HOÀN TIỀN GÓI CƯỚC SAAS */}
+      {/* ========================================================= */}
+      {rejectSubModal.isOpen && rejectSubModal.sub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-scale-up">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-2xl font-bold">
+                💸
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">Từ Chối & Hoàn Tiền Gói Cước</h3>
+                <p className="text-xs text-slate-500">Xác nhận hoàn tiền 100% về tài khoản của chủ sân</p>
+              </div>
+            </div>
+
+            <div className="bg-red-50/70 border border-red-200/80 rounded-2xl p-4 text-xs space-y-2 text-slate-700">
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-medium">Cụm sân:</span>
+                <strong className="text-slate-900">{rejectSubModal.sub.tenant_name}</strong>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-medium">Gói cước đăng ký:</span>
+                <strong className="text-slate-900">{rejectSubModal.sub.plan_name}</strong>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-slate-500 font-medium">Số tiền cần hoàn lại:</span>
+                <strong className="text-red-700 text-sm font-black">
+                  {Number(rejectSubModal.sub.amount_paid).toLocaleString()} ₫
+                </strong>
+              </div>
+              <div className="pt-2 border-t border-red-200/60 space-y-1">
+                <div className="text-[11px] font-bold text-red-900 uppercase">Tài khoản nhận hoàn tiền của Chủ sân:</div>
+                <div>Ngân hàng: <strong>{rejectSubModal.sub.refund_bank_name || 'Chưa cung cấp'}</strong></div>
+                <div>Số tài khoản: <strong className="font-mono text-slate-900 text-sm bg-white px-2 py-0.5 rounded border border-red-200">{rejectSubModal.sub.refund_account_number || 'N/A'}</strong></div>
+                <div>Tên thụ hưởng: <strong>{rejectSubModal.sub.refund_account_name || 'N/A'}</strong></div>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700">Lý do từ chối (Chủ sân sẽ xem được lý do này):</label>
+              <textarea
+                rows={3}
+                value={rejectSubModal.reason}
+                onChange={(e) => setRejectSubModal({ ...rejectSubModal, reason: e.target.value })}
+                placeholder="Nhập lý do từ chối hoặc hướng dẫn..."
+                className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-red-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setRejectSubModal({ isOpen: false, sub: null, reason: '' })}
+                className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition"
+              >
+                Hủy bỏ
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmRejectSub}
+                className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-md active:scale-95"
+              >
+                ✕ Xác nhận Từ chối & Đã hoàn tiền
+              </button>
+            </div>
           </div>
         </div>
       )}

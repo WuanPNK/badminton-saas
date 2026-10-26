@@ -634,12 +634,21 @@ export default function UserMarketplace() {
                     )}
 
                     {b.status === 'COMPLETED' && !b.has_reviewed && (
-                      <button
-                        onClick={() => setReviewModalBooking(b)}
-                        className="bg-amber-500 hover:bg-amber-600 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-extrabold transition shadow-sm"
-                      >
-                        ★ Viết đánh giá sân
-                      </button>
+                      b.can_review ? (
+                        <button
+                          onClick={() => setReviewModalBooking(b)}
+                          className="bg-amber-500 hover:bg-amber-600 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-extrabold transition shadow-sm cursor-pointer"
+                        >
+                          ★ Viết đánh giá sân
+                        </button>
+                      ) : (
+                        <span
+                          className="text-[11px] text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200"
+                          title="Bạn chỉ có thể đánh giá cụm sân khi đã thực tế đến sân check-in"
+                        >
+                          🚫 Chưa check-in (Không thể đánh giá)
+                        </span>
+                      )
                     )}
 
                     {b.has_reviewed && (

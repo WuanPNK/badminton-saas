@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
 import TimeSelect24 from '../../components/common/TimeSelect24';
+import socket from '../../config/socket';
 
 export default function StaffDashboard() {
   const { user, logout } = useAuth();
@@ -16,6 +17,12 @@ export default function StaffDashboard() {
   const [refundRequests, setRefundRequests] = useState([]);
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
+
+  // Modal Quét / Nhập QR Check-in Nhanh (Đề xuất 4)
+  const [showQuickCheckInModal, setShowQuickCheckInModal] = useState(false);
+  const [qrInputCode, setQrInputCode] = useState('');
+  const [quickCheckInLoading, setQuickCheckInLoading] = useState(false);
+  const [lastCheckInResult, setLastCheckInResult] = useState(null);
 
   const [staffBooking, setStaffBooking] = useState({
     courtId: '',
@@ -30,6 +37,7 @@ export default function StaffDashboard() {
 
   const [posCourtId, setPosCourtId] = useState('');
   const [posNote, setPosNote] = useState('');
+
 
   const loadInitial = async () => {
     try {
@@ -64,6 +72,70 @@ export default function StaffDashboard() {
   useEffect(() => {
     loadInitial();
   }, [selectedDate]);
+
+  // Đề xuất 3: Đồng bộ trạng thái thời gian thực bằng Socket.io cho Lễ tân
+  useEffect(() => {
+    if (!tenant?.id) return;
+
+    socket.emit('join_tenant', tenant.id);
+
+    const handleBookingUpdate = (payload) => {
+      loadInitial();
+
+      if (payload.type === 'BOOKING_CONFIRMED') {
+        toast.success(`Khách vừa thanh toán vé #${payload.booking?.booking_code || ''}!`, {
+          icon: '🏸',
+          duration: 4000,
+        });
+      } else if (payload.type === 'BOOKING_CREATED') {
+        toast('Có khách đang đặt giữ chỗ trên ứng dụng.', {
+          icon: '⏳',
+          duration: 3000,
+        });
+      } else if (payload.type === 'BOOKING_CANCELLED') {
+        toast('Một ca đặt sân đã được hủy / giải phóng chỗ.', {
+          icon: 'ℹ️',
+          duration: 3000,
+        });
+      } else if (payload.type === 'BOOKING_CHECKED_IN') {
+        toast.success(`Check-in thành công: #${payload.booking?.booking_code || ''}`, {
+          duration: 3000,
+        });
+      }
+    };
+
+    socket.on('booking_updated', handleBookingUpdate);
+
+    return () => {
+      socket.emit('leave_tenant', tenant.id);
+      socket.off('booking_updated', handleBookingUpdate);
+    };
+  }, [tenant?.id, selectedDate]);
+
+  // Đề xuất 4: Xử lý Check-in nhanh 1 giây qua mã QR hoặc mã vé
+  const handleQuickCheckIn = async (e) => {
+    if (e) e.preventDefault();
+    if (!qrInputCode.trim()) {
+      toast.error('Vui lòng nhập hoặc quét mã vé!');
+      return;
+    }
+
+    setQuickCheckInLoading(true);
+    try {
+      const res = await axiosClient.post('/bookings/quick-check-in', {
+        code: qrInputCode.trim(),
+      });
+      toast.success(res.data.message);
+      setLastCheckInResult(res.data.booking);
+      setQrInputCode('');
+      loadInitial();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Lỗi khi thực hiện check-in nhanh.');
+    } finally {
+      setQuickCheckInLoading(false);
+    }
+  };
+
 
   const handleCreateStaffBooking = async (e) => {
     e.preventDefault();
@@ -245,17 +317,42 @@ export default function StaffDashboard() {
                   <h2 className="font-extrabold text-slate-900 text-base">Danh sách ca chơi trong ngày</h2>
                   <p className="text-xs text-slate-500">Check-in khách đến sân và xác nhận hoàn tất ca chơi</p>
                 </div>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLastCheckInResult(null);
+                      setShowQuickCheckInModal(true);
+                    }}
+                    className="bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-500 hover:to-teal-500 active:scale-95 text-white font-extrabold px-3.5 py-2 rounded-xl text-xs flex items-center gap-2 shadow-md shadow-emerald-600/20 transition cursor-pointer"
+                  >
+                    <span className="text-sm">📷</span>
+                    <span>Quét / Nhập QR Check-in (1s)</span>
+                  </button>
+                  <input
+                    type="date"
+                    value={selectedDate}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
               </div>
+
 
               <div className="space-y-3">
                 {timeline.bookings.map((b) => {
                   const courtObj = timeline.courts.find((c) => c.id === b.court_id);
+                  const now = new Date();
+                  const startTime = new Date(b.start_time);
+                  const endTime = new Date(b.end_time);
+                  const windowStart = new Date(startTime.getTime() - 15 * 60 * 1000); // 15 phút trước giờ chơi
+
+                  const isCheckedIn = Boolean(b.is_checked_in || b.checked_in_at);
+                  const isPastEndTime = now >= endTime;
+                  const isCompleted = b.status === 'COMPLETED' || isPastEndTime;
+                  const isWithinWindow = now >= windowStart && now <= endTime;
+                  const isTooEarly = now < windowStart;
+
                   return (
                     <div
                       key={b.id}
@@ -279,45 +376,58 @@ export default function StaffDashboard() {
                             {b.booking_type}
                           </span>
                           <span className={`px-2.5 py-0.5 rounded-full font-bold text-[10px] ${
-                            b.status === 'COMPLETED'
+                            isCompleted
                               ? 'bg-blue-100 text-blue-800'
                               : b.status === 'CONFIRMED'
                               ? 'bg-emerald-100 text-emerald-800'
                               : 'bg-slate-200 text-slate-700'
                           }`}>
-                            {b.status}
+                            {isCompleted ? 'COMPLETED' : b.status}
                           </span>
                         </div>
                         <p className="text-slate-600 font-medium pt-0.5">
-                          🕒 {new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} →{' '}
-                          {new Date(b.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                          🕒 {startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} →{' '}
+                          {endTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}
                           {b.walk_in_guest_name && <span className="ml-2 text-slate-800 font-semibold">• Khách: {b.walk_in_guest_name}</span>}
                         </p>
                       </div>
 
-                      {b.status === 'CONFIRMED' && (
-                        <div className="flex items-center gap-2">
-                          {b.checked_in_at ? (
-                            <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl font-black flex items-center gap-1.5 shadow-sm text-xs">
-                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                              ✓ Đã Check-in ({new Date(b.checked_in_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })})
-                            </span>
-                          ) : (
-                            <button
-                              onClick={() => handleOperation(b.id, 'CHECK_IN')}
-                              className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-xl font-bold transition shadow-sm"
-                            >
-                              📍 Khách Check-in
-                            </button>
-                          )}
+                      {/* CỘT THAO TÁC CHECK-IN (NÚT CHỈ HIỆN MÀU TỪ 15 PHÚT TRƯỚC GIỜ CHƠI ĐẾN HẾT GIỜ) */}
+                      <div className="flex items-center gap-2">
+                        {isCheckedIn ? (
+                          <span className="bg-emerald-50 text-emerald-800 border border-emerald-300 px-3.5 py-2 rounded-xl font-black flex items-center gap-1.5 shadow-sm text-xs">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            ✓ Đã Check-in ({new Date(b.checked_in_at || b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })})
+                          </span>
+                        ) : isWithinWindow ? (
                           <button
-                            onClick={() => handleOperation(b.id, 'COMPLETE')}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl font-bold transition shadow-sm"
+                            onClick={() => handleOperation(b.id, 'CHECK_IN')}
+                            className="bg-blue-600 hover:bg-blue-700 active:scale-95 text-white px-4 py-2 rounded-xl font-extrabold transition shadow-md flex items-center gap-1.5 text-xs animate-pulse"
+                            title="Bấm để xác nhận khách đã đến sân check-in"
                           >
-                            ✓ Hoàn tất ca
+                            <span>📍</span>
+                            <span>Khách Check-In</span>
                           </button>
-                        </div>
-                      )}
+                        ) : isTooEarly ? (
+                          <div className="flex flex-col items-end">
+                            <button
+                              disabled
+                              className="bg-slate-100 text-slate-400 border border-slate-200 px-3.5 py-2 rounded-xl font-bold text-xs cursor-not-allowed flex items-center gap-1.5 opacity-80"
+                              title={`Chỉ mở check-in từ 15 phút trước giờ chơi (từ ${windowStart.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })})`}
+                            >
+                              <span>🔒</span>
+                              <span>Khách Check-In</span>
+                            </button>
+                            <span className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                              Mở lúc {windowStart.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic bg-slate-100 px-2.5 py-1 rounded-lg">
+                            Không check-in (Quá giờ)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -649,6 +759,120 @@ export default function StaffDashboard() {
           </div>
         )}
       </div>
+
+      {/* MODAL QUÉT / NHẬP MÃ QR CHECK-IN NHANH 1 GIÂY (ĐỀ XUẤT 4) */}
+      {showQuickCheckInModal && (
+        <div className="fixed inset-0 bg-slate-900/65 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 relative space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center text-xl shadow-lg shadow-emerald-500/25">
+                  📷
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
+                    Quét / Nhập QR Check-in Nhanh
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Khách giơ mã QR trong Email hoặc đọc mã vé
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowQuickCheckInModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-sm transition"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Thông báo kết quả check-in gần nhất */}
+            {lastCheckInResult && (
+              <div className="p-4 bg-emerald-50 border-2 border-emerald-400 rounded-2xl space-y-2">
+                <div className="flex items-center gap-2 text-emerald-800 font-black text-sm">
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
+                  ✓ Check-in Thành Công!
+                </div>
+                <div className="text-xs text-slate-700 grid grid-cols-2 gap-2 pt-1">
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Mã vé:</span>
+                    <strong className="font-mono text-slate-900">#{lastCheckInResult.booking_code}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Sân thi đấu:</span>
+                    <strong className="text-emerald-700">{lastCheckInResult.court_name || 'Sân tiêu chuẩn'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Khách hàng:</span>
+                    <strong className="text-slate-800">{lastCheckInResult.customer_name || 'Khách vãng lai'}</strong>
+                  </div>
+                  <div>
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Giờ vào:</span>
+                    <strong className="text-slate-800">{new Date(lastCheckInResult.checked_in_at || new Date()).toLocaleTimeString('vi-VN')}</strong>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Form nhập / quét mã */}
+            <form onSubmit={handleQuickCheckIn} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                  Mã QR Hoặc Mã Đơn Đặt Sân
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    autoFocus
+                    placeholder="VD: DS123456 hoặc dùng máy quét QR bắn vào đây..."
+                    value={qrInputCode}
+                    onChange={(e) => setQrInputCode(e.target.value)}
+                    className="w-full px-4 py-3.5 bg-slate-50 border-2 border-slate-200 focus:border-emerald-500 focus:bg-white rounded-2xl text-sm font-mono font-bold text-slate-900 tracking-wider placeholder:font-sans placeholder:font-normal placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 transition"
+                  />
+                  {qrInputCode && (
+                    <button
+                      type="button"
+                      onClick={() => setQrInputCode('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs px-2 py-1"
+                    >
+                      Xóa
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1.5 leading-relaxed">
+                  💡 Hỗ trợ: Máy quét mã vạch/QR (tự động Enter), dán mã chuỗi <code className="bg-slate-100 px-1 py-0.5 rounded text-emerald-700">CHECKIN:...</code> hoặc gõ 6 chữ số mã vé.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowQuickCheckInModal(false)}
+                  className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl text-xs transition"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={quickCheckInLoading || !qrInputCode.trim()}
+                  className="flex-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 text-white font-extrabold py-3 px-5 rounded-xl text-xs shadow-md shadow-emerald-500/25 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  {quickCheckInLoading ? (
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                  ) : (
+                    <>
+                      <span>⚡</span>
+                      <span>Xác nhận Check-in (1s)</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
-}
+}
