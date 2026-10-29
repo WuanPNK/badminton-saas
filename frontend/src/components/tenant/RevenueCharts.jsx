@@ -70,7 +70,9 @@ export default function RevenueCharts({ analytics }) {
         <div>
           <div className="flex items-center gap-2.5">
             <span className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black text-sm border border-emerald-100">
-              📊
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
             </span>
             <h2 className="text-base font-extrabold text-slate-900">Báo Cáo Doanh Thu & Quyết Toán Sân</h2>
             <span className="hidden sm:inline-flex bg-emerald-100/70 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-200">
@@ -90,7 +92,9 @@ export default function RevenueCharts({ analytics }) {
             className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-sm hover:shadow flex items-center gap-2 disabled:opacity-50"
             title="Xuất file Excel (.xlsx) gồm 3 Sheets: Tổng hợp, Sổ cái đặt sân, Hóa đơn POS"
           >
-            <span className="text-sm">📗</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
             <span>{isExporting ? 'Đang trích xuất...' : 'Xuất Báo Cáo Excel (.xlsx)'}</span>
           </button>
 
@@ -101,7 +105,9 @@ export default function RevenueCharts({ analytics }) {
             className="px-3.5 py-2.5 bg-slate-50 hover:bg-slate-100 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition border border-slate-200/80 flex items-center gap-1.5 disabled:opacity-50"
             title="Xuất file CSV chuẩn UTF-8 (Excel không lỗi font)"
           >
-            <span>📄</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
             <span>Xuất CSV</span>
           </button>
         </div>
@@ -125,7 +131,7 @@ export default function RevenueCharts({ analytics }) {
           <p className="text-2xl font-black text-slate-900 mt-1">
             {summary.paidBookingsCount || 0} <span className="text-sm font-semibold text-slate-500">lượt</span>
           </p>
-          <p className="mt-2 text-[11px] text-emerald-600 font-medium">✓ Đã thanh toán 100% qua VietQR</p>
+          <p className="mt-2 text-[11px] text-emerald-600 font-medium">Đã thanh toán 100% qua VietQR</p>
         </div>
 
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
@@ -307,7 +313,7 @@ export default function RevenueCharts({ analytics }) {
           </div>
 
           <div className="mt-6 pt-4 border-t border-slate-100 text-[11px] text-slate-500">
-            💡 <strong>Mẹo vận hành:</strong> Bán thêm nước giải khát, cầu thi đấu và quấn cán vợt tại quầy giúp tăng trung bình <strong>15–25%</strong> doanh thu ròng mỗi ca chơi.
+            <strong>Mẹo vận hành:</strong> Bán thêm nước giải khát, cầu thi đấu và quấn cán vợt tại quầy giúp tăng trung bình <strong>15–25%</strong> doanh thu ròng mỗi ca chơi.
           </div>
         </div>
       </div>
@@ -383,7 +389,7 @@ export default function RevenueCharts({ analytics }) {
                     </span>
                     <div>
                       <strong className="text-slate-900">{rc.court_name}</strong>
-                      <span className="ml-1 text-[10px] text-slate-500">({rc.type})</span>
+                      <span className="ml-1 text-[10px] text-slate-500">({rc.type === 'VIP' ? 'VIP' : 'Tiêu chuẩn'})</span>
                     </div>
                   </div>
                   <div className="text-right">
@@ -421,7 +427,7 @@ export default function RevenueCharts({ analytics }) {
                     <div>
                       <strong className="text-slate-900">{tp.name}</strong>
                       <span className="ml-1 text-[10px] bg-white border px-1.5 py-0.2 rounded text-slate-500">
-                        {tp.category}
+                        {tp.category === 'DRINK' ? 'Nước uống' : tp.category === 'SHUTTLECOCK' ? 'Cầu lông' : tp.category === 'RACKET_RENTAL' ? 'Thuê vợt' : tp.category === 'ACCESSORY' ? 'Phụ kiện' : tp.category}
                       </span>
                     </div>
                   </div>

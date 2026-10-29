@@ -6,6 +6,9 @@ import { useAuth } from '../../context/AuthContext';
 import RevenueCharts from '../../components/tenant/RevenueCharts';
 import TimeSelect24, { formatTime24 } from '../../components/common/TimeSelect24';
 import ExpandableAddButton from '../../components/common/ExpandableAddButton';
+import NotificationBell from '../../components/common/NotificationBell';
+import TenantShiftManager from '../../components/tenant/TenantShiftManager';
+import { isValidEmail, isValidVNPhone, sanitizePhoneInput } from '../../utils/validators';
 
 // Danh mục phân loại mặt hàng POS (100% Tiếng Việt)
 export const POS_CATEGORIES = [
@@ -34,7 +37,7 @@ export default function TenantDashboard() {
   const [analytics, setAnalytics] = useState(null);
   const [reviewsData, setReviewsData] = useState({ reviews: [], stats: {} });
 
-  // Quản lý Gói cước SaaS của Cụm sân
+  // Quản lý Gói cước phần mềm của Cụm sân
   const [subData, setSubData] = useState({
     currentSubscription: null,
     pendingSubscription: null,
@@ -94,7 +97,6 @@ export default function TenantDashboard() {
     confirmText: 'Xác nhận',
     cancelText: 'Hủy bỏ',
     confirmColor: 'emerald', // 'red' | 'emerald' | 'amber'
-    icon: '⚠️',
     onConfirm: null,
   });
 
@@ -104,7 +106,6 @@ export default function TenantDashboard() {
     confirmText = 'Xác nhận',
     cancelText = 'Hủy bỏ',
     confirmColor = 'emerald',
-    icon = '⚠️',
     onConfirm,
   }) => {
     setConfirmModal({
@@ -114,7 +115,6 @@ export default function TenantDashboard() {
       confirmText,
       cancelText,
       confirmColor,
-      icon,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         if (onConfirm) await onConfirm();
@@ -174,10 +174,7 @@ export default function TenantDashboard() {
         setAvailablePlans(plansRes.data.plans);
       }
 
-      setVenueImages(setRes.data.tenant.images || [
-        'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80',
-        'https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?auto=format&fit=crop&w=900&q=80'
-      ]);
+      setVenueImages(Array.isArray(setRes.data.tenant.images) ? setRes.data.tenant.images : []);
       setVenueRules(setRes.data.tenant.rules || [
         'Vui lòng mang giày thể thao chuyên dụng hoặc không để lại vết đen trên mặt thảm.',
         'Có mặt trước giờ đặt 5–10 phút để làm thủ tục Check-in tại quầy Lễ tân.',
@@ -227,7 +224,7 @@ export default function TenantDashboard() {
   // --- 2. XỬ LÝ SÂN (CRUD & BẢO TRÌ) ---
   const handleOpenAddCourt = () => {
     if (!subData.currentSubscription) {
-      toast.error('Bạn cần đăng ký gói cước SaaS và được Super Admin phê duyệt trước khi tạo sân!');
+      toast.error('Bạn cần đăng ký gói cước phần mềm và được Admin phê duyệt trước khi tạo sân!');
       setTab('SUBSCRIPTION');
       return;
     }
@@ -250,7 +247,7 @@ export default function TenantDashboard() {
     }
 
     if (!subData.currentSubscription) {
-      toast.error('Bạn cần đăng ký gói cước SaaS và được phê duyệt trước khi tạo sân!');
+      toast.error('Bạn cần đăng ký gói cước phần mềm và được phê duyệt trước khi tạo sân!');
       setTab('SUBSCRIPTION');
       return;
     }
@@ -266,10 +263,9 @@ export default function TenantDashboard() {
 
     askConfirm({
       title: 'Xác nhận Thêm Sân Mới',
-      message: `Bạn có chắc chắn muốn thêm sân "${newCourt.name}" (${newCourt.type}) vào cụm sân?`,
+      message: `Bạn có chắc chắn muốn thêm sân "${newCourt.name}" (${newCourt.type === 'VIP' ? 'Sân VIP' : 'Sân tiêu chuẩn'}) vào cụm sân?`,
       confirmText: 'Thêm sân',
       confirmColor: 'emerald',
-      icon: '🏸',
       onConfirm: async () => {
         try {
           const res = await axiosClient.post('/tenant/courts', newCourt);
@@ -293,7 +289,6 @@ export default function TenantDashboard() {
       message: `Lưu các cập nhật cho sân "${editingCourt.name}"?`,
       confirmText: 'Lưu thay đổi',
       confirmColor: 'emerald',
-      icon: '✏️',
       onConfirm: async () => {
         try {
           const res = await axiosClient.put(`/tenant/courts/${editingCourt.id}`, {
@@ -316,7 +311,6 @@ export default function TenantDashboard() {
       message: `Bạn có chắc chắn muốn xóa sân "${court.name}" khỏi cụm sân? Thao tác này sẽ xóa sân khỏi hệ thống.`,
       confirmText: 'Xóa sân này',
       confirmColor: 'red',
-      icon: '🗑️',
       onConfirm: async () => {
         try {
           const res = await axiosClient.delete(`/tenant/courts/${court.id}`);
@@ -348,7 +342,6 @@ export default function TenantDashboard() {
       message: `Đưa sân "${maintenanceModalCourt.name}" vào trạng thái bảo trì? Khách hàng sẽ không thể đặt khung giờ này.`,
       confirmText: 'Xác nhận bảo trì',
       confirmColor: 'amber',
-      icon: '🔧',
       onConfirm: async () => {
         try {
           const maintenanceStart =
@@ -382,7 +375,6 @@ export default function TenantDashboard() {
       message: `Xác nhận mở lại sân "${court.name}" để khách hàng có thể tiếp tục đặt lịch?`,
       confirmText: 'Mở lại sân',
       confirmColor: 'emerald',
-      icon: '✅',
       onConfirm: async () => {
         try {
           const res = await axiosClient.put(`/tenant/courts/${court.id}/maintenance`, {
@@ -405,7 +397,6 @@ export default function TenantDashboard() {
       message: `Thêm khung giá ${Number(newRule.pricePerHour).toLocaleString()} ₫/h (${formatTime24(newRule.startTime)} → ${formatTime24(newRule.endTime)}) cho sân ${newRule.courtType}?`,
       confirmText: 'Thêm khung giá',
       confirmColor: 'emerald',
-      icon: '💰',
       onConfirm: async () => {
         try {
           await axiosClient.post('/tenant/pricing-rules', {
@@ -430,7 +421,6 @@ export default function TenantDashboard() {
       message: `Lưu thay đổi khung giá ${Number(editingRule.price_per_hour).toLocaleString()} ₫/h (${formatTime24(editingRule.start_time)} → ${formatTime24(editingRule.end_time)})?`,
       confirmText: 'Lưu thay đổi',
       confirmColor: 'emerald',
-      icon: '✏️',
       onConfirm: async () => {
         try {
           await axiosClient.put(`/tenant/pricing-rules/${editingRule.id}`, {
@@ -456,7 +446,6 @@ export default function TenantDashboard() {
       message: `Bạn có chắc chắn muốn xóa khung giá (${formatTime24(rule.start_time)} → ${formatTime24(rule.end_time)}) của sân ${rule.court_type}?`,
       confirmText: 'Xóa khung giá',
       confirmColor: 'red',
-      icon: '🗑️',
       onConfirm: async () => {
         try {
           await axiosClient.delete(`/tenant/pricing-rules/${rule.id}`);
@@ -474,15 +463,14 @@ export default function TenantDashboard() {
     e.preventDefault();
     if (!newProduct.name.trim()) return;
     askConfirm({
-      title: 'Xác nhận Thêm vào Kho POS',
+      title: 'Xác nhận Thêm vào Kho Hàng',
       message: `Thêm mặt hàng "${newProduct.name}" (Đơn giá: ${Number(newProduct.price).toLocaleString()} ₫, Tồn kho: ${newProduct.stockQuantity}) vào kho?`,
       confirmText: 'Thêm vào kho',
       confirmColor: 'emerald',
-      icon: '📦',
       onConfirm: async () => {
         try {
           await axiosClient.post('/pos/products', newProduct);
-          toast.success('Đã thêm sản phẩm vào kho POS!');
+          toast.success('Đã thêm sản phẩm vào kho hàng!');
           setShowAddProductModal(false);
           setNewProduct({ name: '', category: 'DRINK', price: 15000, stockQuantity: 50 });
           fetchTenantData();
@@ -501,7 +489,6 @@ export default function TenantDashboard() {
       message: `Lưu các thay đổi cho mặt hàng "${editingProduct.name}"?`,
       confirmText: 'Lưu thay đổi',
       confirmColor: 'emerald',
-      icon: '✏️',
       onConfirm: async () => {
         try {
           await axiosClient.put(`/pos/products/${editingProduct.id}`, {
@@ -523,10 +510,9 @@ export default function TenantDashboard() {
   const handleDeleteProduct = (prod) => {
     askConfirm({
       title: 'Xác nhận Xóa Mặt hàng',
-      message: `Bạn có chắc chắn muốn xóa mặt hàng "${prod.name}" khỏi kho POS?`,
+      message: `Bạn có chắc chắn muốn xóa mặt hàng "${prod.name}" khỏi kho hàng?`,
       confirmText: 'Xóa mặt hàng',
       confirmColor: 'red',
-      icon: '🗑️',
       onConfirm: async () => {
         try {
           const res = await axiosClient.delete(`/pos/products/${prod.id}`);
@@ -542,6 +528,14 @@ export default function TenantDashboard() {
   // --- 5. XỬ LÝ TÀI KHOẢN LỄ TÂN (CRUD VỚI XÁC NHẬN MẬT KHẨU) ---
   const triggerCreateStaff = (e) => {
     e.preventDefault();
+    if (!isValidEmail(newStaff.email)) {
+      toast.error('Email không đúng định dạng!');
+      return;
+    }
+    if (!isValidVNPhone(newStaff.phone)) {
+      toast.error('Số điện thoại không đúng định dạng Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08, 09)!');
+      return;
+    }
     if (newStaff.password !== newStaff.confirmPassword) {
       toast.error('Mật khẩu và xác nhận mật khẩu không khớp!');
       return;
@@ -555,7 +549,6 @@ export default function TenantDashboard() {
       message: `Cấp tài khoản lễ tân mới cho "${newStaff.fullName}" (${newStaff.email})?`,
       confirmText: 'Cấp tài khoản',
       confirmColor: 'emerald',
-      icon: '👤',
       onConfirm: async () => {
         try {
           const res = await axiosClient.post('/tenant/staff', {
@@ -579,6 +572,11 @@ export default function TenantDashboard() {
     e.preventDefault();
     if (!editingStaff) return;
 
+    if (editingStaff.phone && !isValidVNPhone(editingStaff.phone)) {
+      toast.error('Số điện thoại không đúng định dạng Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08, 09)!');
+      return;
+    }
+
     if (editingStaff.newPassword) {
       if (editingStaff.newPassword !== editingStaff.confirmNewPassword) {
         toast.error('Mật khẩu mới và xác nhận mật khẩu không khớp!');
@@ -595,7 +593,6 @@ export default function TenantDashboard() {
       message: `Lưu thay đổi thông tin cho nhân viên "${editingStaff.full_name}"?`,
       confirmText: 'Lưu thay đổi',
       confirmColor: 'emerald',
-      icon: '✏️',
       onConfirm: async () => {
         try {
           const res = await axiosClient.put(`/tenant/staff/${editingStaff.id}`, {
@@ -620,7 +617,6 @@ export default function TenantDashboard() {
       message: `Bạn có chắc chắn muốn xóa hoặc vô hiệu hóa tài khoản của lễ tân "${staff.full_name}"?`,
       confirmText: 'Xóa tài khoản',
       confirmColor: 'red',
-      icon: '🗑️',
       onConfirm: async () => {
         try {
           const res = await axiosClient.delete(`/tenant/staff/${staff.id}`);
@@ -634,22 +630,88 @@ export default function TenantDashboard() {
   };
 
   // --- 6. XỬ LÝ ĐIỀU KHOẢN, NỘI QUY & THƯ VIỆN ẢNH SÂN (CRUD) ---
-  const handleAddImage = () => {
-    if (!newImageUrl.trim()) {
-      toast.error('Vui lòng nhập link ảnh hợp lệ (https://...)');
-      return;
-    }
-    setVenueImages([...venueImages, newImageUrl.trim()]);
-    setNewImageUrl('');
-    toast.success('Đã thêm ảnh vào danh sách! Bấm "Lưu thay đổi" để đồng bộ.');
+  const compressImageFile = (file, maxWidth = 1280, maxHeight = 1280, quality = 0.82) => {
+    return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) {
+        return reject(new Error('Tệp tải lên không phải hình ảnh hợp lệ.'));
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.onerror = () => reject(new Error('Không thể đọc dữ liệu hình ảnh.'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('Lỗi khi đọc tệp từ thiết bị.'));
+      reader.readAsDataURL(file);
+    });
   };
 
-  const handleSetCoverImage = (index) => {
+  const syncVenueImagesToBackend = async (updatedImages) => {
+    setVenueImages(updatedImages);
+    try {
+      await axiosClient.put('/tenant/venue-details', {
+        name: tenant.name,
+        district: tenant.district,
+        address: tenant.address,
+        phoneContact: tenant.phone_contact,
+        description: venueDescription,
+        images: updatedImages,
+        rules: venueRules,
+      });
+      fetchTenantData();
+    } catch (err) {
+      console.error('Lỗi lưu ảnh:', err);
+      toast.error(err.response?.data?.message || 'Không thể đồng bộ ảnh lên máy chủ.');
+    }
+  };
+
+  const handleUploadLocalImages = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const toastId = toast.loading(`Đang tải lên ${files.length} ảnh...`);
+    try {
+      const compressedList = [];
+      for (const file of files) {
+        const base64 = await compressImageFile(file);
+        compressedList.push(base64);
+      }
+      const updated = [...venueImages, ...compressedList];
+      await syncVenueImagesToBackend(updated);
+      toast.success(`Đã tải lên ${files.length} ảnh thành công!`, { id: toastId });
+    } catch (err) {
+      toast.error(err.message || 'Lỗi khi tải ảnh.', { id: toastId });
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleSetCoverImage = async (index) => {
     if (index === 0) return;
     const target = venueImages[index];
     const filtered = venueImages.filter((_, i) => i !== index);
-    setVenueImages([target, ...filtered]);
-    toast.success('Đã đặt làm ảnh bìa chính (Cover)!');
+    const updated = [target, ...filtered];
+    await syncVenueImagesToBackend(updated);
+    toast.success('Đã chọn làm ảnh bìa!');
   };
 
   const handleStartEditImage = (index) => {
@@ -657,29 +719,43 @@ export default function TenantDashboard() {
     setEditingImageUrl(venueImages[index]);
   };
 
-  const handleSaveEditImage = () => {
-    if (!editingImageUrl.trim()) {
-      toast.error('Đường link ảnh không được để trống.');
+  const handleReplaceImageFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const base64 = await compressImageFile(file);
+      setEditingImageUrl(base64);
+      toast.success('Đã chọn ảnh mới!');
+    } catch (err) {
+      toast.error(err.message || 'Lỗi khi đọc ảnh.');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleSaveEditImage = async () => {
+    if (!editingImageUrl) {
+      toast.error('Vui lòng chọn ảnh.');
       return;
     }
     const updated = [...venueImages];
-    updated[editingImageIdx] = editingImageUrl.trim();
-    setVenueImages(updated);
+    updated[editingImageIdx] = editingImageUrl;
     setEditingImageIdx(null);
     setEditingImageUrl('');
-    toast.success('Đã cập nhật link ảnh thành công!');
+    await syncVenueImagesToBackend(updated);
+    toast.success('Đã đổi ảnh thành công!');
   };
 
   const handleRemoveImage = (index) => {
     askConfirm({
-      title: 'Xác nhận Xóa Ảnh',
-      message: 'Bạn có chắc chắn muốn xóa ảnh này khỏi thư viện hiển thị của cụm sân?',
-      confirmText: 'Xóa ảnh này',
+      title: 'Xóa ảnh',
+      message: 'Bạn có chắc muốn xóa ảnh này?',
+      confirmText: 'Xóa',
       confirmColor: 'red',
-      icon: '🗑️',
-      onConfirm: () => {
-        setVenueImages(venueImages.filter((_, i) => i !== index));
-        toast.success('Đã xóa ảnh khỏi danh sách!');
+      onConfirm: async () => {
+        const updated = venueImages.filter((_, i) => i !== index);
+        await syncVenueImagesToBackend(updated);
+        toast.success('Đã xóa ảnh!');
       },
     });
   };
@@ -718,7 +794,6 @@ export default function TenantDashboard() {
       message: 'Bạn có chắc chắn muốn xóa điều khoản này khỏi nội quy của cụm sân?',
       confirmText: 'Xóa điều khoản',
       confirmColor: 'red',
-      icon: '🗑️',
       onConfirm: () => {
         setVenueRules(venueRules.filter((_, i) => i !== index));
         toast.success('Đã xóa điều khoản!');
@@ -774,7 +849,7 @@ export default function TenantDashboard() {
 
     const total = calculateTotalAmount(checkoutModal.plan, checkoutModal.billingCycle);
     if (total > 0 && !checkoutModal.transactionCode.trim()) {
-      toast.error('Vui lòng nhập Mã giao dịch chuyển khoản VietQR để Super Admin đối soát.');
+      toast.error('Vui lòng nhập Mã giao dịch chuyển khoản VietQR để Admin đối soát.');
       return;
     }
 
@@ -816,19 +891,19 @@ export default function TenantDashboard() {
 
   // Danh sách các Menu Tabs (Đã loại bỏ tab Hub trùng lặp, dùng nút Back ở Header)
   const TAB_ITEMS = [
-    { id: 'COURTS', label: '🏸 Quản lý Sân & Bảo trì', show: true },
+    { id: 'COURTS', label: 'Quản lý Sân & Bảo trì', show: true },
     {
       id: 'SUBSCRIPTION',
-      label: hasPlan ? '⚡ Gói Cước SaaS' : '⚡ Gói Cước SaaS (!)',
+      label: hasPlan ? 'Gói Cước Phần Mềm' : 'Gói Cước Phần Mềm (!)',
       show: true,
     },
-    { id: 'PRICING_RULES', label: '💰 Bảng Giá Động', show: true },
-    { id: 'POS_INVENTORY', label: '📦 Kho hàng POS', show: canUsePos && tenant.enable_pos_module },
-    { id: 'STAFF', label: '👥 Tài khoản Lễ tân', show: true },
-    { id: 'REVIEWS', label: '⭐ Xem đánh giá', show: true },
-    { id: 'VENUE_DETAILS', label: '📝 Mô tả', show: true },
-    { id: 'ANALYTICS', label: '📊 Báo cáo Doanh thu', show: true },
-    { id: 'SETTINGS', label: '⚙️ Cấu hình Cụm sân & VietQR', show: true },
+    { id: 'PRICING_RULES', label: 'Bảng Giá Động', show: true },
+    { id: 'POS_INVENTORY', label: 'Kho hàng & Dịch vụ', show: canUsePos && tenant.enable_pos_module },
+    { id: 'STAFF', label: 'Tài khoản Lễ tân', show: true },
+    { id: 'REVIEWS', label: 'Xem đánh giá', show: true },
+    { id: 'VENUE_DETAILS', label: 'Mô tả', show: true },
+    { id: 'ANALYTICS', label: 'Báo cáo Doanh thu', show: true },
+    { id: 'SETTINGS', label: 'Cấu hình Cụm sân & VietQR', show: true },
   ];
 
 
@@ -909,9 +984,6 @@ export default function TenantDashboard() {
                   Lựa chọn một chức năng dưới đây để quản lý sân bãi, theo dõi doanh thu, cấu hình giá động hoặc quản lý nhân sự quầy lễ tân.
                 </p>
               </div>
-              <div className="absolute right-4 bottom-4 opacity-10 text-9xl select-none pointer-events-none">
-                🏸
-              </div>
             </div>
 
             {/* LƯỚI CARD CHỨC NĂNG (GIAO DIỆN DỊU MẮT, RÕ RÀNG, CHUYÊN NGHIỆP) */}
@@ -922,8 +994,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-emerald-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center text-2xl shadow-sm">
-                    🏸
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7M4 18h2" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {courts.length} Sân
@@ -951,8 +1025,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl shadow-sm">
-                    ⚡
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
                   </div>
                   <span
                     className={`text-[11px] font-black px-2.5 py-1 rounded-full ${
@@ -963,12 +1039,12 @@ export default function TenantDashboard() {
                   >
                     {subData.pendingSubscription
                       ? 'Chờ duyệt'
-                      : subData.currentSubscription?.badge || 'Gói SaaS'}
+                      : subData.currentSubscription?.badge || 'Gói Dịch Vụ'}
                   </span>
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900 group-hover:text-indigo-700 transition-colors tracking-tight">
-                    Gói Cước & Dịch Vụ SaaS
+                    Gói Cước & Dịch Vụ
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
                     {subData.pendingSubscription
@@ -992,8 +1068,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-amber-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-100 flex items-center justify-center text-2xl shadow-sm">
-                    ⚡
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-200/70 px-2.5 py-1 rounded-full">
                     Trực tiếp
@@ -1004,11 +1082,11 @@ export default function TenantDashboard() {
                     Quầy Lễ Tân & Bán Hàng
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
-                    Check-in mã QR, tạo vé vãng lai & xuất hóa đơn đồ uống, cầu lông tại quầy
+                    Check-in mã QR, tạo vé sự kiện & xuất hóa đơn đồ uống, cầu lông tại quầy
                   </p>
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-amber-600 transition-colors">
-                  <span>Mở quầy POS</span>
+                  <span>Bán hàng tại quầy</span>
                   <span className="group-hover:translate-x-1 transition-transform">→</span>
                 </div>
               </div>
@@ -1019,8 +1097,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-blue-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center text-2xl shadow-sm">
-                    📦
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {products.length} Mặt hàng
@@ -1031,7 +1111,7 @@ export default function TenantDashboard() {
                     Kho hàng & Dịch vụ
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
-                    Nước uống, Cầu lông, Quấn cán, Cước, Băng gối, Salonpas & Thuê vợt
+                    Quản lý tồn kho đồ uống, phụ kiện và dịch vụ thuê vợt
                   </p>
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-blue-600 transition-colors">
@@ -1046,8 +1126,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-purple-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 border border-purple-100 flex items-center justify-center text-2xl shadow-sm">
-                    📊
+                  <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 border border-purple-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-purple-50 text-purple-800 border border-purple-200/70 px-2.5 py-1 rounded-full">
                     Trực quan
@@ -1058,7 +1140,7 @@ export default function TenantDashboard() {
                     Doanh thu & Lợi nhuận
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
-                    Biểu đồ doanh thu tiền sân, F&B và thống kê khung giờ vàng
+                    Báo cáo doanh thu tiền sân, dịch vụ và khung giờ cao điểm
                   </p>
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-purple-600 transition-colors">
@@ -1073,8 +1155,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-teal-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center text-2xl shadow-sm">
-                    👥
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {staffList.length} Nhân viên
@@ -1085,7 +1169,7 @@ export default function TenantDashboard() {
                     Quản lý Lễ tân
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
-                    Thêm, sửa, xóa tài khoản lễ tân & cấp lại mật khẩu bảo mật
+                    Phân quyền và quản lý tài khoản nhân viên trực quầy
                   </p>
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-teal-600 transition-colors">
@@ -1100,8 +1184,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl shadow-sm">
-                    💰
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {pricingRules.length} Khung giờ
@@ -1112,7 +1198,7 @@ export default function TenantDashboard() {
                     Bảng giá Động
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
-                    Cấu hình giá giờ cao điểm, giờ thấp điểm theo từng loại sân
+                    Thiết lập giá theo khung giờ cao điểm và ngày trong tuần
                   </p>
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-indigo-600 transition-colors">
@@ -1127,8 +1213,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-rose-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-700 border border-rose-100 flex items-center justify-center text-2xl shadow-sm">
-                    ⭐
+                  <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-700 border border-rose-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-rose-50 text-rose-800 border border-rose-200/70 px-2.5 py-1 rounded-full">
                     {reviewsData.stats?.avg_rating || 5} ★ ({reviewsData.stats?.total_reviews || 0})
@@ -1139,7 +1227,7 @@ export default function TenantDashboard() {
                     Xem đánh giá
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
-                    Xem phản hồi thực tế của khách hàng sau khi hoàn tất đặt sân
+                    Theo dõi đánh giá và phản hồi thực tế từ khách chơi
                   </p>
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-rose-600 transition-colors">
@@ -1154,8 +1242,10 @@ export default function TenantDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-cyan-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-700 border border-cyan-100 flex items-center justify-center text-2xl shadow-sm">
-                    📝
+                  <div className="w-12 h-12 rounded-2xl bg-cyan-50 text-cyan-700 border border-cyan-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {venueImages.length} Ảnh • {venueRules.length} Quy định
@@ -1166,7 +1256,7 @@ export default function TenantDashboard() {
                     Mô tả
                   </h3>
                   <p className="text-xs text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">
-                    Thư viện hình ảnh (xem, sửa, xóa), điều khoản nội quy & giới thiệu cụm sân
+                    Cập nhật hình ảnh, nội quy và thông tin giới thiệu cụm sân
                   </p>
                 </div>
                 <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-400 group-hover:text-cyan-600 transition-colors">
@@ -1186,10 +1276,10 @@ export default function TenantDashboard() {
             <div className="flex flex-wrap justify-between items-center gap-3">
               <div>
                 <h2 className="text-xl font-black text-slate-900">
-                  Bảng Giá Thuê Nền Tảng & Gói Cước SaaS
+                  Bảng Giá Thuê Phần Mềm & Dịch Vụ
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Lựa chọn gói cước phù hợp quy mô cụm sân để mở rộng hạn mức sân con, mở khóa bán lẻ POS và thiết lập bảng giá động linh hoạt.
+                  Lựa chọn gói cước phù hợp quy mô cụm sân để mở rộng hạn mức sân con, mở khóa bán lẻ dịch vụ và thiết lập bảng giá động linh hoạt.
                 </p>
               </div>
             </div>
@@ -1200,7 +1290,7 @@ export default function TenantDashboard() {
                 <div className="flex items-center gap-2">
                   <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping" />
                   <span className="text-xs font-black uppercase tracking-wider text-amber-800">
-                    Yêu Cầu Đăng Ký Đang Chờ Super Admin Phê Duyệt
+                    Yêu Cầu Đăng Ký Đang Chờ Admin Phê Duyệt
                   </span>
                 </div>
                 <div className="text-sm font-black text-slate-900">
@@ -1219,7 +1309,7 @@ export default function TenantDashboard() {
                   <span>Tài khoản hoàn tiền (nếu từ chối): <strong className="text-slate-800">{subData.pendingSubscription.refund_bank_name} - {subData.pendingSubscription.refund_account_number} ({subData.pendingSubscription.refund_account_name})</strong></span>
                 </div>
                 <p className="text-[11px] text-amber-800 pt-1 italic">
-                  * Super Admin sẽ kiểm tra và kích hoạt ngay khi đối soát thành công. Nếu không được duyệt, tiền sẽ được hoàn trả 100% về tài khoản của bạn.
+                  * Admin sẽ kiểm tra và kích hoạt ngay khi đối soát thành công. Nếu không được duyệt, tiền sẽ được hoàn trả 100% về tài khoản của bạn.
                 </p>
               </div>
             )}
@@ -1228,7 +1318,6 @@ export default function TenantDashboard() {
             {!subData.pendingSubscription && subData.history?.[0]?.payment_status === 'REFUNDED' && (
               <div className="bg-red-50 border border-red-200/80 rounded-3xl p-5 text-red-950 space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-base">💸</span>
                   <span className="text-xs font-black uppercase text-red-800">
                     Yêu Cầu Gói Cước Trước Đó Đã Bị Từ Chối & Hoàn Tiền
                   </span>
@@ -1253,7 +1342,7 @@ export default function TenantDashboard() {
                       Gói cước đang hiệu lực
                     </span>
                     <span className="text-xs text-indigo-300 font-bold">
-                      {subData.currentSubscription.badge || 'Gói SaaS'}
+                      {subData.currentSubscription.badge || 'Gói Dịch Vụ'}
                     </span>
                   </div>
                   <h3 className="text-2xl font-black text-white">
@@ -1295,7 +1384,6 @@ export default function TenantDashboard() {
                     }}
                     className="bg-emerald-500 hover:bg-emerald-600 active:scale-95 text-slate-950 font-black px-5 py-3 rounded-2xl text-xs transition shadow-lg flex items-center gap-2 cursor-pointer"
                   >
-                    <span>⚡</span>
                     <span>Nâng Cấp / Gia Hạn Gói</span>
                   </button>
                 </div>
@@ -1305,21 +1393,21 @@ export default function TenantDashboard() {
                 <div className="space-y-2">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-black uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/40 px-2.5 py-0.5 rounded-full">
-                      ⚠️ Chưa kích hoạt gói cước
+                      Chưa kích hoạt gói cước
                     </span>
                     <span className="text-xs text-amber-200 font-bold">
-                      {subData.pendingSubscription ? 'Đang chờ Super Admin duyệt' : 'Chưa đăng ký gói'}
+                      {subData.pendingSubscription ? 'Đang chờ Admin duyệt' : 'Chưa đăng ký gói'}
                     </span>
                   </div>
                   <h3 className="text-2xl font-black text-white">
                     {subData.pendingSubscription
                       ? `Đang chờ duyệt: ${subData.pendingSubscription.plan_name}`
-                      : 'Bạn chưa đăng ký gói cước SaaS nào'}
+                      : 'Bạn chưa đăng ký gói cước phần mềm nào'}
                   </h3>
                   <p className="text-xs text-amber-100/80 max-w-2xl leading-relaxed">
                     {subData.pendingSubscription
-                      ? `Bạn đã thanh toán yêu cầu đăng ký gói ${subData.pendingSubscription.plan_name} (Mã GD: #${subData.pendingSubscription.transaction_code || ''}). Vui lòng chờ Super Admin phê duyệt để bắt đầu khởi tạo sân và đón khách!`
-                      : 'Để có thể khởi tạo sân đấu và sử dụng các tính năng phần mềm, bạn cần chọn 1 trong các gói cước bên dưới, chuyển khoản thanh toán và chờ Super Admin phê duyệt.'}
+                      ? `Bạn đã thanh toán yêu cầu đăng ký gói ${subData.pendingSubscription.plan_name} (Mã GD: #${subData.pendingSubscription.transaction_code || ''}). Vui lòng chờ Admin phê duyệt để bắt đầu khởi tạo sân và đón khách!`
+                      : 'Để có thể khởi tạo sân đấu và sử dụng các tính năng phần mềm, bạn cần chọn 1 trong các gói cước bên dưới, chuyển khoản thanh toán và chờ Admin phê duyệt.'}
                   </p>
                   <div className="text-xs text-slate-300 flex flex-wrap gap-4 pt-1">
                     <div>
@@ -1341,7 +1429,6 @@ export default function TenantDashboard() {
                       }}
                       className="bg-amber-400 hover:bg-amber-300 active:scale-95 text-slate-950 font-black px-5 py-3 rounded-2xl text-xs transition shadow-lg flex items-center gap-2 whitespace-nowrap cursor-pointer"
                     >
-                      <span>👇</span>
                       <span>Chọn Gói Cước Ngay</span>
                     </button>
                   </div>
@@ -1377,7 +1464,7 @@ export default function TenantDashboard() {
                     >
                       {p.is_featured && (
                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-700 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-sm">
-                          ★ ĐƯỢC CHỌN NHIỀU NHẤT
+                          ĐƯỢC CHỌN NHIỀU NHẤT
                         </div>
                       )}
 
@@ -1435,7 +1522,7 @@ export default function TenantDashboard() {
                             {Array.isArray(p.features) &&
                               p.features.map((feat, idx) => (
                                 <li key={idx} className="flex items-start gap-1.5">
-                                  <span className="text-emerald-500 font-bold">✓</span>
+                                  <span className="text-emerald-500 font-bold">•</span>
                                   <span>{feat}</span>
                                 </li>
                               ))}
@@ -1449,14 +1536,14 @@ export default function TenantDashboard() {
                             disabled
                             className="w-full py-2.5 rounded-xl bg-slate-100 text-slate-400 font-bold text-xs cursor-not-allowed"
                           >
-                            ✓ Gói Đang Sử Dụng
+                            Gói Đang Sử Dụng
                           </button>
                         ) : isPendingThis ? (
                           <button
                             disabled
                             className="w-full py-2.5 rounded-xl bg-amber-100 text-amber-800 font-black text-xs cursor-not-allowed animate-pulse"
                           >
-                            ⏳ Đang Chờ Duyệt...
+                            Đang Chờ Duyệt...
                           </button>
                         ) : (
                           <button
@@ -1530,16 +1617,16 @@ export default function TenantDashboard() {
                           <td className="p-3">
                             {h.payment_status === 'PAID' ? (
                               <span className="bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full font-bold text-[10px]">
-                                ✓ Đã Kích Hoạt
+                                Đã Kích Hoạt
                               </span>
                             ) : h.payment_status === 'PENDING' ? (
                               <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full font-bold text-[10px] animate-pulse">
-                                ⏳ Chờ Duyệt
+                                Chờ Duyệt
                               </span>
                             ) : (
                               <div className="space-y-0.5">
                                 <span className="bg-red-100 text-red-800 px-2.5 py-0.5 rounded-full font-bold text-[10px]">
-                                  💸 Đã Hoàn Tiền
+                                  Đã Hoàn Tiền
                                 </span>
                                 {h.rejection_reason && (
                                   <span className="block text-[10px] text-red-600 italic">
@@ -1589,15 +1676,19 @@ export default function TenantDashboard() {
             {!subData.currentSubscription && (
               <div className="p-5 bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-3xl flex flex-col md:flex-row justify-between items-start md:items-center gap-4 shadow-sm">
                 <div className="flex items-center gap-3">
-                  <span className="text-3xl">⚠️</span>
+                  <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
                   <div>
                     <h4 className="font-extrabold text-amber-950 text-sm">
-                      Cụm Sân Chưa Kích Hoạt Gói Cước SaaS
+                      Cụm Sân Chưa Kích Hoạt Gói Cước
                     </h4>
                     <p className="text-xs text-amber-800 mt-0.5">
                       {subData.pendingSubscription
-                        ? `Yêu cầu đăng ký gói "${subData.pendingSubscription.plan_name}" đang chờ Super Admin phê duyệt. Khi được duyệt, bạn sẽ được khởi tạo tối đa ${subData.pendingSubscription.max_courts} sân.`
-                        : 'Bạn cần đăng ký gói cước và được Super Admin phê duyệt thì mới có thể khởi tạo sân thi đấu và mở bán trên sàn.'}
+                        ? `Yêu cầu đăng ký gói "${subData.pendingSubscription.plan_name}" đang chờ Admin phê duyệt. Khi được duyệt, bạn sẽ được khởi tạo tối đa ${subData.pendingSubscription.max_courts} sân.`
+                        : 'Bạn cần đăng ký gói cước và được Admin phê duyệt thì mới có thể khởi tạo sân thi đấu và mở bán trên sàn.'}
                     </p>
                   </div>
                 </div>
@@ -1606,7 +1697,7 @@ export default function TenantDashboard() {
                   onClick={() => setTab('SUBSCRIPTION')}
                   className="bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-extrabold px-5 py-2.5 rounded-xl text-xs whitespace-nowrap shadow-md shadow-amber-600/20 transition cursor-pointer"
                 >
-                  ⚡ {subData.pendingSubscription ? 'Xem Trạng Thái Gói →' : 'Đăng Ký Gói Cước Ngay →'}
+                  {subData.pendingSubscription ? 'Xem Trạng Thái Gói →' : 'Đăng Ký Gói Cước Ngay →'}
                 </button>
               </div>
             )}
@@ -1646,7 +1737,7 @@ export default function TenantDashboard() {
                         <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
                           c.type === 'VIP' ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-blue-100 text-blue-900 border-blue-200'
                         }`}>
-                          {c.type}
+                          {c.type === 'VIP' ? 'Sân VIP' : 'Sân tiêu chuẩn'}
                         </span>
                         <span
                           className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
@@ -1655,13 +1746,13 @@ export default function TenantDashboard() {
                               : 'bg-amber-100 text-amber-800'
                           }`}
                         >
-                          {c.status}
+                          {c.status === 'PUBLISHED' ? 'Đang hoạt động' : c.status === 'PENDING' ? 'Chờ duyệt' : c.status}
                         </span>
                       </div>
 
                       {c.is_under_maintenance && (
                         <div className="text-[11px] text-red-600 font-bold flex items-center gap-1">
-                          <span>🔧 Đang bảo trì</span>
+                          <span>Đang bảo trì</span>
                           {c.maintenance_start && (
                             <span>
                               từ {new Date(c.maintenance_start).toLocaleDateString('vi-VN')}{' '}
@@ -1687,7 +1778,7 @@ export default function TenantDashboard() {
                           onClick={() => triggerEndMaintenance(c)}
                           className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-xl transition text-[11px] shadow-sm"
                         >
-                          ✓ Hoàn tất bảo trì (Mở sân)
+                          Hoàn tất bảo trì (Mở sân)
                         </button>
                       ) : (
                         <button
@@ -1695,7 +1786,7 @@ export default function TenantDashboard() {
                           onClick={() => openMaintenanceModal(c)}
                           className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-xl transition text-[11px]"
                         >
-                          🔧 Đặt lịch bảo trì
+                          Đặt lịch bảo trì
                         </button>
                       )}
 
@@ -1705,17 +1796,17 @@ export default function TenantDashboard() {
                         onClick={() => setEditingCourt(c)}
                         className="bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 font-bold px-3 py-1.5 rounded-xl transition text-[11px]"
                       >
-                        ✏️ Sửa
+                        Sửa
                       </button>
 
                       {/* NÚT XÓA SÂN */}
                       <button
                         type="button"
                         onClick={() => handleDeleteCourt(c)}
-                        className="text-red-500 hover:bg-red-50 p-1.5 rounded-xl transition font-bold"
+                        className="text-red-500 hover:bg-red-50 px-2 py-1.5 rounded-xl transition font-bold"
                         title="Xóa sân"
                       >
-                        🗑️
+                        Xóa
                       </button>
                     </div>
                   </div>
@@ -1736,8 +1827,10 @@ export default function TenantDashboard() {
           <div className="space-y-6">
             {!subData.currentSubscription || Number(subData.currentSubscription.price_per_month) < 199000 ? (
               <div className="bg-white p-8 sm:p-12 rounded-3xl border-2 border-slate-200/90 text-center max-w-xl mx-auto space-y-4 shadow-sm my-6">
-                <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-700 flex items-center justify-center text-3xl mx-auto shadow-inner">
-                  🔒
+                <div className="w-16 h-16 rounded-3xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto shadow-inner">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-slate-900">Tính Năng Bảng Giá Động Đang Bị Khóa</h3>
@@ -1750,7 +1843,7 @@ export default function TenantDashboard() {
                   onClick={() => setTab('SUBSCRIPTION')}
                   className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black px-6 py-3 rounded-2xl text-xs transition shadow-md shadow-emerald-600/20 cursor-pointer"
                 >
-                  ⚡ Đăng Ký / Nâng Cấp Gói Tiêu Chuẩn Ngay →
+                  Đăng Ký / Nâng Cấp Gói Tiêu Chuẩn Ngay →
                 </button>
               </div>
             ) : (
@@ -1800,7 +1893,7 @@ export default function TenantDashboard() {
                             onClick={() => setEditingRule(r)}
                             className="bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-slate-700 font-bold transition text-xs shadow-sm"
                           >
-                            ✏️ Sửa
+                            Sửa
                           </button>
                           <button
                             type="button"
@@ -1830,7 +1923,7 @@ export default function TenantDashboard() {
         {tab === 'POS_INVENTORY' && tenant.enable_pos_module && (
           <div className="space-y-6">
             <div>
-              <h2 className="text-xl font-black text-slate-900">Quản lý Kho hàng POS & Dịch vụ</h2>
+              <h2 className="text-xl font-black text-slate-900">Quản lý Kho hàng & Dịch vụ</h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 Nhập kho, chỉnh sửa giá bán, theo dõi số lượng tồn kho của nước giải khát, cầu lông, quấn cán, cước, băng gối, salonpas.
               </p>
@@ -1881,22 +1974,22 @@ export default function TenantDashboard() {
                           onClick={() => setEditingProduct(p)}
                           className="bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-slate-700 font-bold text-xs shadow-sm transition"
                         >
-                          ✏️ Sửa
+                          Sửa
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeleteProduct(p)}
-                          className="text-red-500 hover:bg-red-50 p-2 rounded-xl font-bold transition text-sm"
+                          className="text-red-500 hover:bg-red-50 px-2 py-1.5 rounded-xl font-bold transition text-xs"
                           title="Xóa mặt hàng"
                         >
-                          🗑️
+                          Xóa
                         </button>
                       </div>
                     </div>
                   );
                 })}
                 {products.length === 0 && (
-                  <p className="text-xs text-slate-400 py-8 text-center">Kho hàng POS hiện đang trống.</p>
+                  <p className="text-xs text-slate-400 py-8 text-center">Kho hàng hiện đang trống.</p>
                 )}
               </div>
             </div>
@@ -1922,7 +2015,7 @@ export default function TenantDashboard() {
                     Danh sách Nhân viên Lễ tân ({staffList.length})
                   </h3>
                   <p className="text-xs text-slate-400">
-                    Tài khoản nhân viên trực ca tại quầy và bán hàng POS
+                    Tài khoản nhân viên trực ca tại quầy và bán hàng
                   </p>
                 </div>
                 <ExpandableAddButton
@@ -1951,7 +2044,7 @@ export default function TenantDashboard() {
                         </span>
                       </div>
                       <div className="text-[11px] text-slate-500 font-medium">
-                        📧 {st.email} • 📞 {st.phone || 'Chưa cập nhật SĐT'}
+                        {st.email} • {st.phone || 'Chưa cập nhật SĐT'}
                       </div>
                     </div>
 
@@ -1967,15 +2060,15 @@ export default function TenantDashboard() {
                         }
                         className="bg-white border border-slate-300 hover:bg-slate-100 px-3 py-1.5 rounded-xl text-slate-700 font-bold text-xs shadow-sm transition"
                       >
-                        ✏️ Sửa & Đổi MK
+                        Sửa & Đổi MK
                       </button>
                       <button
                         type="button"
                         onClick={() => handleDeleteStaff(st)}
-                        className="text-red-500 hover:bg-red-50 p-2 rounded-xl font-bold transition text-sm"
+                        className="text-red-500 hover:bg-red-50 px-2 py-1.5 rounded-xl font-bold transition text-xs"
                         title="Xóa hoặc Vô hiệu hóa lễ tân"
                       >
-                        🗑️
+                        Xóa
                       </button>
                     </div>
                   </div>
@@ -1985,6 +2078,9 @@ export default function TenantDashboard() {
                 )}
               </div>
             </div>
+
+            {/* CẤU HÌNH CA TRỰC & ĐỐI SOÁT BÀN GIAO TIỀN MẶT */}
+            <TenantShiftManager />
           </div>
         )}
 
@@ -2074,7 +2170,6 @@ export default function TenantDashboard() {
                 type="submit"
                 className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold px-6 py-3 rounded-2xl text-xs transition shadow-md flex items-center gap-2"
               >
-                <span>💾</span>
                 <span>Lưu Tất Cả Thay Đổi</span>
               </button>
             </div>
@@ -2084,57 +2179,35 @@ export default function TenantDashboard() {
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
                 <div className="flex justify-between items-center pb-2 border-b border-slate-100">
                   <div>
-                    <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                      <span>🖼️</span>
-                      <span>Thư viện Hình ảnh Sân ({venueImages.length})</span>
+                    <h3 className="font-extrabold text-slate-900 text-base">
+                      Thư viện hình ảnh ({venueImages.length})
                     </h3>
-                    <p className="text-[11px] text-slate-400">Xem ảnh lớn, chỉnh sửa link, chọn ảnh bìa hoặc xóa ảnh</p>
+                    <p className="text-xs text-slate-400">Chọn ảnh bìa, thay ảnh hoặc xóa ảnh</p>
                   </div>
                   <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-100">
-                    Ảnh 1 = Ảnh bìa sàn
+                    Ảnh 1 = Ảnh bìa
                   </span>
                 </div>
 
-                {/* FORM THÊM ẢNH */}
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      placeholder="Dán đường link ảnh (https://...)"
-                      value={newImageUrl}
-                      onChange={(e) => setNewImageUrl(e.target.value)}
-                      className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleAddImage}
-                      className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm whitespace-nowrap"
-                    >
-                      + Thêm ảnh
-                    </button>
-                  </div>
-
-                  {/* GỢI Ý ẢNH MẪU 1 CHẠM */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
-                    <span className="text-[10px] font-bold text-slate-400">Gợi ý ảnh đẹp:</span>
-                    {[
-                      { label: 'Thảm BWF Chuẩn', url: 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=1200&q=80' },
-                      { label: 'Đèn Thi Đấu', url: 'https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?auto=format&fit=crop&w=1200&q=80' },
-                      { label: 'Sân Thi Đấu VIP', url: 'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=1200&q=80' },
-                    ].map((p, idx) => (
-                      <button
-                        key={idx}
-                        type="button"
-                        onClick={() => {
-                          setVenueImages([...venueImages, p.url]);
-                          toast.success(`Đã thêm ảnh "${p.label}"!`);
-                        }}
-                        className="text-[10px] font-bold bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 text-slate-600 px-2.5 py-1 rounded-lg border border-slate-200 transition"
-                      >
-                        + {p.label}
-                      </button>
-                    ))}
-                  </div>
+                {/* NÚT TẢI ẢNH */}
+                <div>
+                  <label
+                    htmlFor="venue-image-file-input"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                    <span>Tải ảnh</span>
+                  </label>
+                  <input
+                    id="venue-image-file-input"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleUploadLocalImages}
+                  />
                 </div>
 
                 {/* DANH SÁCH ẢNH DẠNG GRID CRUD */}
@@ -2155,8 +2228,8 @@ export default function TenantDashboard() {
                         />
                         <div className="absolute top-2 left-2 flex items-center gap-1.5">
                           {i === 0 ? (
-                            <span className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-md">
-                              ★ Ảnh bìa (Cover)
+                            <span className="bg-emerald-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-md flex items-center gap-1">
+                              <span>★</span> Ảnh bìa chính
                             </span>
                           ) : (
                             <span className="bg-slate-900/80 backdrop-blur text-white text-[10px] font-extrabold px-2 py-0.5 rounded-md shadow">
@@ -2166,7 +2239,6 @@ export default function TenantDashboard() {
                         </div>
                         <div className="absolute inset-0 bg-slate-950/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           <span className="bg-white/90 backdrop-blur text-slate-900 text-xs font-black px-3 py-1.5 rounded-xl shadow-lg flex items-center gap-1.5">
-                            <span>🔍</span>
                             <span>Xem ảnh lớn</span>
                           </span>
                         </div>
@@ -2178,27 +2250,27 @@ export default function TenantDashboard() {
                           <button
                             type="button"
                             onClick={() => setPreviewModalImage(imgUrl)}
-                            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 p-1.5 rounded-lg transition"
+                            className="text-slate-600 hover:text-slate-900 hover:bg-slate-100 px-2 py-1 rounded-lg transition"
                             title="Phóng to ảnh"
                           >
-                            👁️ Xem
+                            Xem
                           </button>
                           <button
                             type="button"
                             onClick={() => handleStartEditImage(i)}
-                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 p-1.5 rounded-lg transition"
-                            title="Sửa đường link ảnh"
+                            className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-1 rounded-lg transition"
+                            title="Sửa hoặc thay thế ảnh này"
                           >
-                            ✏️ Sửa
+                            Sửa / Đổi
                           </button>
                           {i !== 0 && (
                             <button
                               type="button"
                               onClick={() => handleSetCoverImage(i)}
-                              className="text-amber-600 hover:text-amber-800 hover:bg-amber-50 p-1.5 rounded-lg transition"
+                              className="text-amber-600 hover:text-amber-800 hover:bg-amber-50 px-2 py-1 rounded-lg transition"
                               title="Đưa lên làm ảnh bìa chính"
                             >
-                              ⭐ Làm bìa
+                              Làm bìa
                             </button>
                           )}
                         </div>
@@ -2206,17 +2278,28 @@ export default function TenantDashboard() {
                         <button
                           type="button"
                           onClick={() => handleRemoveImage(i)}
-                          className="text-red-500 hover:text-red-700 hover:bg-red-50 p-1.5 rounded-lg transition"
-                          title="Xóa ảnh này"
+                          className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-lg transition flex items-center gap-1"
+                          title="Xóa vĩnh viễn ảnh này"
                         >
-                          🗑️ Xóa
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                          <span>Xóa</span>
                         </button>
                       </div>
                     </div>
                   ))}
                   {venueImages.length === 0 && (
-                    <div className="col-span-2 text-center py-12 text-slate-400 text-xs border border-dashed rounded-2xl">
-                      Chưa có hình ảnh nào. Hãy dán liên kết ảnh ở trên để thêm vào thư viện.
+                    <div className="col-span-2 text-center py-12 px-4 text-slate-400 text-xs border-2 border-dashed border-slate-200 rounded-2xl space-y-2">
+                      <div className="w-12 h-12 mx-auto rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </div>
+                      <p className="font-bold text-slate-600">Chưa có ảnh nào trong thư viện</p>
+                      <p className="text-xs text-slate-400">
+                        Bấm nút <strong>"Tải ảnh"</strong> ở trên để tải ảnh sân từ máy lên.
+                      </p>
                     </div>
                   )}
                 </div>
@@ -2225,9 +2308,8 @@ export default function TenantDashboard() {
               {/* QUẢN LÝ ĐIỀU KHOẢN, NỘI QUY & MÔ TẢ SÂN */}
               <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 space-y-4">
                 <div className="pb-2 border-b border-slate-100">
-                  <h3 className="font-extrabold text-slate-900 text-base flex items-center gap-2">
-                    <span>📋</span>
-                    <span>Nội quy & Điều khoản sân ({venueRules.length})</span>
+                  <h3 className="font-extrabold text-slate-900 text-base">
+                    Nội quy & Điều khoản sân ({venueRules.length})
                   </h3>
                   <p className="text-[11px] text-slate-400">Hiển thị toàn bộ các nội quy sẵn có, chỉnh sửa trực tiếp hoặc thêm bớt</p>
                 </div>
@@ -2249,7 +2331,7 @@ export default function TenantDashboard() {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="VD: Không mang đồ ăn có mùi hoặc bã kẹo cao su vào sân đấu..."
+                      placeholder="Nội quy cụm sân..."
                       value={newRuleText}
                       onChange={(e) => setNewRuleText(e.target.value)}
                       className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -2292,7 +2374,7 @@ export default function TenantDashboard() {
                 {/* DANH SÁCH TẤT CẢ NỘI QUY SẴN CÓ VỚI INLINE EDIT */}
                 <div className="space-y-2 max-h-80 overflow-y-auto p-1">
                   <div className="text-[11px] font-extrabold text-slate-400 uppercase tracking-wider">
-                    Toàn bộ điều khoản hiện có (Bấm ✏️ để sửa câu chữ):
+                    Toàn bộ điều khoản hiện có (Bấm Sửa để thay đổi câu chữ):
                   </div>
                   {venueRules.map((r, i) => (
                     <div
@@ -2336,7 +2418,7 @@ export default function TenantDashboard() {
                               onClick={handleSaveEditRule}
                               className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] shadow-sm"
                             >
-                              ✓ Lưu sửa
+                              Lưu sửa
                             </button>
                           </div>
                         </div>
@@ -2356,7 +2438,7 @@ export default function TenantDashboard() {
                               className="text-blue-600 hover:bg-blue-50 px-2 py-1 rounded-lg font-bold text-[11px] transition"
                               title="Sửa nội dung"
                             >
-                              ✏️ Sửa
+                              Sửa
                             </button>
                             <button
                               type="button"
@@ -2364,7 +2446,7 @@ export default function TenantDashboard() {
                               className="text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg font-bold text-[11px] transition"
                               title="Xóa điều khoản này"
                             >
-                              🗑️
+                              Xóa
                             </button>
                           </div>
                         </div>
@@ -2384,7 +2466,7 @@ export default function TenantDashboard() {
               type="submit"
               className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-extrabold py-3.5 rounded-2xl text-sm transition shadow-md"
             >
-              💾 Lưu Toàn Bộ Mô Tả, Nội Quy & Thư Viện Ảnh Lên Hệ Thống
+              Lưu Toàn Bộ Mô Tả, Nội Quy & Thư Viện Ảnh Lên Hệ Thống
             </button>
           </form>
         )}
@@ -2416,7 +2498,7 @@ export default function TenantDashboard() {
                 },
                 {
                   key: 'enable_pos_module',
-                  title: 'Module Bán hàng POS tại quầy',
+                  title: 'Module Bán hàng tại quầy',
                   desc: 'Quản lý tồn kho nước uống, cầu lông và tạo hóa đơn tại quầy lễ tân',
                   locked: !canUsePos,
                   lockMsg: 'Yêu cầu Gói Tiêu Chuẩn (199k) trở lên',
@@ -2442,7 +2524,7 @@ export default function TenantDashboard() {
                       <span>{toggle.title}</span>
                       {toggle.locked && (
                         <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">
-                          🔒 {toggle.lockMsg}
+                          {toggle.lockMsg}
                         </span>
                       )}
                     </div>
@@ -2503,7 +2585,7 @@ export default function TenantDashboard() {
                     type="text"
                     value={tenant.qr_bank_name || ''}
                     onChange={(e) => setTenant({ ...tenant, qr_bank_name: e.target.value })}
-                    placeholder="MB"
+                    placeholder="Tên ngân hàng"
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                   />
                 </div>
@@ -2513,8 +2595,8 @@ export default function TenantDashboard() {
                     type="text"
                     value={tenant.qr_account_number || ''}
                     onChange={(e) => setTenant({ ...tenant, qr_account_number: e.target.value })}
-                    placeholder="0987654321"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono"
+                    placeholder="Số tài khoản"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                   />
                 </div>
                 <div>
@@ -2523,8 +2605,8 @@ export default function TenantDashboard() {
                     type="text"
                     value={tenant.qr_account_name || ''}
                     onChange={(e) => setTenant({ ...tenant, qr_account_name: e.target.value })}
-                    placeholder="NGUYEN VAN A"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase"
+                    placeholder="Tên chủ tài khoản"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
                   />
                 </div>
               </div>
@@ -2533,7 +2615,7 @@ export default function TenantDashboard() {
                 type="submit"
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl text-sm transition shadow-sm"
               >
-                💾 Lưu Toàn Bộ Cấu Hình Cụm Sân
+                Lưu Toàn Bộ Cấu Hình Cụm Sân
               </button>
             </div>
           </form>
@@ -2554,9 +2636,8 @@ export default function TenantDashboard() {
               ✕
             </button>
 
-            <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-              <span>🔧</span>
-              <span>Lên Lịch Bảo Trì - {maintenanceModalCourt.name}</span>
+            <h3 className="text-base font-black text-slate-900">
+              Lên Lịch Bảo Trì - {maintenanceModalCourt.name}
             </h3>
             <p className="text-xs text-slate-500 leading-relaxed">
               Khi kích hoạt bảo trì, tài khoản khách hàng sẽ không thể chọn đặt sân trong thời gian bảo trì. Hệ thống sẽ tự động kiểm tra nếu có khách đã đặt trước sẽ cảnh báo.
@@ -2598,7 +2679,7 @@ export default function TenantDashboard() {
                   </label>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="block text-[11px] text-slate-500 font-semibold mb-1">📅 Ngày bắt đầu</span>
+                      <span className="block text-[11px] text-slate-500 font-semibold mb-1">Ngày bắt đầu</span>
                       <input
                         type="date"
                         required
@@ -2608,7 +2689,7 @@ export default function TenantDashboard() {
                       />
                     </div>
                     <div>
-                      <span className="block text-[11px] text-slate-500 font-semibold mb-1">🕒 Giờ bắt đầu (24H)</span>
+                      <span className="block text-[11px] text-slate-500 font-semibold mb-1">Giờ bắt đầu (24H)</span>
                       <TimeSelect24
                         value={maintStartTime}
                         onChange={(e) => setMaintStartTime(e.target.value)}
@@ -2631,7 +2712,7 @@ export default function TenantDashboard() {
                   required
                   value={maintNote}
                   onChange={(e) => setMaintNote(e.target.value)}
-                  placeholder="VD: Thay mặt thảm, sửa hệ thống đèn"
+                  placeholder="Lý do bảo trì sân..."
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl"
                 />
               </div>
@@ -2688,7 +2769,7 @@ export default function TenantDashboard() {
                   onChange={(e) => setEditingCourt({ ...editingCourt, type: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
                 >
-                  <option value="STANDARD">Sân STANDARD</option>
+                  <option value="STANDARD">Sân Tiêu chuẩn</option>
                   {tenant.enable_vip_courts && <option value="VIP">Sân VIP</option>}
                 </select>
               </div>
@@ -2734,7 +2815,7 @@ export default function TenantDashboard() {
                   onChange={(e) => setEditingRule({ ...editingRule, court_type: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold"
                 >
-                  <option value="STANDARD">Sân STANDARD</option>
+                  <option value="STANDARD">Sân Tiêu chuẩn</option>
                   <option value="VIP">Sân VIP</option>
                 </select>
               </div>
@@ -2799,7 +2880,7 @@ export default function TenantDashboard() {
             >
               ✕
             </button>
-            <h3 className="text-base font-black text-slate-900">Chỉnh sửa Mặt hàng POS</h3>
+            <h3 className="text-base font-black text-slate-900">Chỉnh sửa Mặt hàng</h3>
             <form onSubmit={triggerUpdateProduct} className="space-y-3 text-xs">
               <div>
                 <label className="block font-bold text-slate-700 mb-1">Tên sản phẩm</label>
@@ -2893,14 +2974,33 @@ export default function TenantDashboard() {
                 />
               </div>
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Số điện thoại</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block font-bold text-slate-700">Số điện thoại</label>
+                  {editingStaff.phone?.trim() && (
+                    <span className={`text-[10px] font-bold ${isValidVNPhone(editingStaff.phone) ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {isValidVNPhone(editingStaff.phone) ? '10 số hợp lệ' : `${editingStaff.phone.length}/10 số`}
+                    </span>
+                  )}
+                </div>
                 <input
-                  type="text"
+                  type="tel"
                   required
+                  maxLength={10}
                   value={editingStaff.phone}
-                  onChange={(e) => setEditingStaff({ ...editingStaff, phone: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  onChange={(e) => setEditingStaff({ ...editingStaff, phone: sanitizePhoneInput(e.target.value) })}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm transition focus:bg-white focus:outline-none focus:ring-2 ${
+                    editingStaff.phone?.trim()
+                      ? isValidVNPhone(editingStaff.phone)
+                        ? 'border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-400 focus:ring-red-400/20'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
                 />
+                {editingStaff.phone?.trim() && !isValidVNPhone(editingStaff.phone) && (
+                  <p className="text-[11px] text-red-500 mt-1 leading-tight">
+                    SĐT di động VN gồm 10 số (đầu 03, 05, 07, 08, 09).
+                  </p>
+                )}
               </div>
 
               <div className="p-3 bg-amber-50 rounded-2xl border border-amber-200 space-y-2">
@@ -2976,8 +3076,10 @@ export default function TenantDashboard() {
               ✕
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl font-black">
-                💰
+              <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center shadow-sm">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">Thêm Khung Giá Mới</h3>
@@ -2992,8 +3094,8 @@ export default function TenantDashboard() {
                   onChange={(e) => setNewRule({ ...newRule, courtType: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="STANDARD">Sân STANDARD (Tiêu chuẩn)</option>
-                  <option value="VIP">Sân VIP (Cao cấp)</option>
+                  <option value="STANDARD">Sân Tiêu chuẩn</option>
+                  <option value="VIP">Sân VIP</option>
                 </select>
               </div>
               <div>
@@ -3001,7 +3103,7 @@ export default function TenantDashboard() {
                 <input
                   type="number"
                   required
-                  placeholder="VD: 120000"
+                  placeholder="Đơn giá (VNĐ/giờ)"
                   value={newRule.pricePerHour}
                   onChange={(e) => setNewRule({ ...newRule, pricePerHour: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -3059,8 +3161,10 @@ export default function TenantDashboard() {
               ✕
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-xl font-black">
-                📦
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-sm">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                </svg>
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">Nhập Hàng Mới Vào Kho</h3>
@@ -3073,7 +3177,7 @@ export default function TenantDashboard() {
                 <input
                   type="text"
                   required
-                  placeholder="VD: Nước Revive, Quấn cán Yonex, Salonpas"
+                  placeholder="Tên sản phẩm / dịch vụ"
                   value={newProduct.name}
                   onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -3132,7 +3236,7 @@ export default function TenantDashboard() {
                   type="submit"
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 rounded-xl font-bold transition shadow-sm"
                 >
-                  + Thêm Vào Kho POS
+                  + Thêm Vào Kho Hàng
                 </button>
               </div>
             </form>
@@ -3154,8 +3258,10 @@ export default function TenantDashboard() {
               ✕
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-800 flex items-center justify-center text-xl font-black">
-                👤
+              <div className="w-10 h-10 rounded-2xl bg-blue-100 text-blue-800 flex items-center justify-center shadow-sm">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">Cấp Tài khoản Lễ tân Mới</h3>
@@ -3168,7 +3274,7 @@ export default function TenantDashboard() {
                 <input
                   type="text"
                   required
-                  placeholder="VD: Nguyễn Văn Lễ Tân"
+                  placeholder="Họ và tên nhân viên"
                   value={newStaff.fullName}
                   onChange={(e) => setNewStaff({ ...newStaff, fullName: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -3176,27 +3282,64 @@ export default function TenantDashboard() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Email đăng nhập</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block font-bold text-slate-700">Email đăng nhập</label>
+                  {newStaff.email.trim() && (
+                    <span className={`text-[10px] font-bold ${isValidEmail(newStaff.email) ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {isValidEmail(newStaff.email) ? 'Email hợp lệ' : 'Định dạng chưa đúng'}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="email"
                   required
-                  placeholder="letan@gmail.com"
+                  placeholder="email@example.com"
                   value={newStaff.email}
                   onChange={(e) => setNewStaff({ ...newStaff, email: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm transition focus:bg-white focus:outline-none focus:ring-2 ${
+                    newStaff.email.trim()
+                      ? isValidEmail(newStaff.email)
+                        ? 'border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-400 focus:ring-red-400/20'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
                 />
+                {newStaff.email.trim() && !isValidEmail(newStaff.email) && (
+                  <p className="text-[11px] text-red-500 mt-1 leading-tight">
+                    Cần có ký tự @ và đuôi tên miền (VD: .com, .edu.vn).
+                  </p>
+                )}
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Số điện thoại</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block font-bold text-slate-700">Số điện thoại</label>
+                  {newStaff.phone.trim() && (
+                    <span className={`text-[10px] font-bold ${isValidVNPhone(newStaff.phone) ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {isValidVNPhone(newStaff.phone) ? '10 số hợp lệ' : `${newStaff.phone.length}/10 số`}
+                    </span>
+                  )}
+                </div>
                 <input
-                  type="text"
+                  type="tel"
                   required
-                  placeholder="0903000001"
+                  maxLength={10}
+                  placeholder="0903 000 001"
                   value={newStaff.phone}
-                  onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  onChange={(e) => setNewStaff({ ...newStaff, phone: sanitizePhoneInput(e.target.value) })}
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm transition focus:bg-white focus:outline-none focus:ring-2 ${
+                    newStaff.phone.trim()
+                      ? isValidVNPhone(newStaff.phone)
+                        ? 'border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-400 focus:ring-red-400/20'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
                 />
+                {newStaff.phone.trim() && !isValidVNPhone(newStaff.phone) && (
+                  <p className="text-[11px] text-red-500 mt-1 leading-tight">
+                    SĐT di động VN gồm 10 số (đầu 03, 05, 07, 08, 09).
+                  </p>
+                )}
               </div>
 
               <div>
@@ -3259,8 +3402,10 @@ export default function TenantDashboard() {
               ✕
             </button>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-xl font-black">
-                🏸
+              <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center shadow-sm">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7M4 18h2" />
+                </svg>
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">Thêm Sân Mới vào Cụm</h3>
@@ -3273,7 +3418,7 @@ export default function TenantDashboard() {
                 <input
                   type="text"
                   required
-                  placeholder="VD: Sân Tiêu Chuẩn 03, Sân VIP 02"
+                  placeholder="Tên sân (VD: Sân 1, Sân 2)"
                   value={newCourt.name}
                   onChange={(e) => setNewCourt({ ...newCourt, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -3286,8 +3431,8 @@ export default function TenantDashboard() {
                   onChange={(e) => setNewCourt({ ...newCourt, type: e.target.value })}
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-bold focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <option value="STANDARD">Sân STANDARD (Tiêu chuẩn)</option>
-                  {tenant.enable_vip_courts && <option value="VIP">Sân VIP (Cao cấp)</option>}
+                  <option value="STANDARD">Sân Tiêu chuẩn</option>
+                  {tenant.enable_vip_courts && <option value="VIP">Sân VIP</option>}
                 </select>
                 {!tenant.enable_vip_courts && (
                   <p className="text-[11px] text-amber-600 mt-1">
@@ -3323,7 +3468,7 @@ export default function TenantDashboard() {
           <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center gap-3">
               <div
-                className={`w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shadow-sm ${
+                className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-sm ${
                   confirmModal.confirmColor === 'red'
                     ? 'bg-red-100 text-red-600'
                     : confirmModal.confirmColor === 'amber'
@@ -3331,7 +3476,15 @@ export default function TenantDashboard() {
                     : 'bg-emerald-100 text-emerald-700'
                 }`}
               >
-                {confirmModal.icon}
+                {confirmModal.confirmColor === 'red' ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
               </div>
               <div>
                 <h3 className="font-extrabold text-slate-900 text-base">{confirmModal.title}</h3>
@@ -3381,7 +3534,6 @@ export default function TenantDashboard() {
           >
             <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-2">
-                <span className="text-base">🖼️</span>
                 <span className="font-black text-sm text-slate-900">Xem ảnh chi tiết</span>
               </div>
               <button
@@ -3417,47 +3569,47 @@ export default function TenantDashboard() {
       )}
 
       {/* ========================================================= */}
-      {/* MODAL 9: SỬA ĐƯỜNG LINK ẢNH (IMAGE URL EDIT) */}
+      {/* MODAL: THAY ĐỔI ẢNH */}
       {/* ========================================================= */}
       {editingImageIdx !== null && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999]">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center text-xl font-black">
-                ✏️
-              </div>
-              <div>
-                <h3 className="font-extrabold text-slate-900 text-base">
-                  Chỉnh sửa link Ảnh #{editingImageIdx + 1}
-                </h3>
-                <p className="text-[11px] text-slate-400">Thay đổi đường dẫn hình ảnh hiển thị trên sàn</p>
-              </div>
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-4">
+            <div>
+              <h3 className="font-extrabold text-slate-900 text-base">
+                Thay đổi ảnh #{editingImageIdx + 1}
+              </h3>
+              <p className="text-xs text-slate-400">Chọn ảnh mới từ máy để thay thế ảnh này</p>
             </div>
 
             <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Đường link ảnh mới (https://...)</label>
-                <input
-                  type="url"
-                  required
-                  value={editingImageUrl}
-                  onChange={(e) => setEditingImageUrl(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
-              </div>
-
               {editingImageUrl && (
-                <div className="rounded-xl overflow-hidden border border-slate-200 h-36 bg-slate-100">
+                <div className="rounded-2xl overflow-hidden border border-slate-200 h-44 bg-slate-900">
                   <img
                     src={editingImageUrl}
                     alt="Xem trước ảnh"
                     className="w-full h-full object-cover"
-                    onError={(e) => {
-                      e.target.src = 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80';
-                    }}
                   />
                 </div>
               )}
+
+              <div>
+                <label
+                  htmlFor="replace-image-file-input"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                  </svg>
+                  <span>Chọn ảnh mới từ máy</span>
+                </label>
+                <input
+                  id="replace-image-file-input"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleReplaceImageFile}
+                />
+              </div>
             </div>
 
             <div className="flex gap-2.5 pt-2">
@@ -3469,14 +3621,14 @@ export default function TenantDashboard() {
                 }}
                 className="flex-1 py-2.5 rounded-xl border border-slate-200 font-bold text-xs text-slate-600 hover:bg-slate-100 transition"
               >
-                Hủy bỏ
+                Hủy
               </button>
               <button
                 type="button"
                 onClick={handleSaveEditImage}
                 className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition shadow-sm"
               >
-                ✓ Lưu thay đổi
+                Lưu thay đổi
               </button>
             </div>
           </div>
@@ -3491,8 +3643,10 @@ export default function TenantDashboard() {
           <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 space-y-4 my-8">
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl font-bold">
-                  ⚡
+                <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center shadow-sm">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                  </svg>
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-slate-900">
@@ -3628,7 +3782,7 @@ export default function TenantDashboard() {
                     <div className="text-xs space-y-1.5 text-slate-700 flex-1">
                       <div>Ngân hàng: <strong className="text-slate-900">MB Bank (Quân Đội)</strong></div>
                       <div>Số tài khoản: <strong className="font-mono text-slate-900 text-sm bg-white px-2 py-0.5 rounded border border-slate-200">0987654321</strong></div>
-                      <div>Chủ tài khoản: <strong className="text-slate-900">PLATFORM SUPER ADMIN</strong></div>
+                      <div>Chủ tài khoản: <strong className="text-slate-900">PLATFORM ADMIN</strong></div>
                       <div>Nội dung CK: <strong className="font-mono text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">GOI {checkoutModal.plan.name.slice(0, 10)} {tenant.name.slice(0, 8)}</strong></div>
                     </div>
                   </div>
@@ -3649,7 +3803,7 @@ export default function TenantDashboard() {
                             transactionCode: e.target.value,
                           }))
                         }
-                        placeholder="Ví dụ: MB123456789 hoặc FT2610..."
+                        placeholder="Mã giao dịch ngân hàng"
                         className="w-full mt-1 p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -3664,7 +3818,7 @@ export default function TenantDashboard() {
                             paymentProofNote: e.target.value,
                           }))
                         }
-                        placeholder="Ví dụ: Đã chuyển khoản từ app Techcombank..."
+                        placeholder="Ghi chú chuyển khoản (tùy chọn)"
                         className="w-full mt-1 p-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500"
                       />
                     </div>
@@ -3674,11 +3828,10 @@ export default function TenantDashboard() {
               {/* THÔNG TIN TÀI KHOẢN NHẬN HOÀN TIỀN (NẾU TỪ CHỐI) */}
               <div className="bg-amber-50/70 border border-amber-200/80 rounded-2xl p-4 space-y-2 text-xs">
                 <div className="flex items-center gap-1.5 text-amber-900 font-black uppercase text-[11px] tracking-wider">
-                  <span>🛡️</span>
                   <span>Tài khoản nhận Hoàn tiền (Nếu không được duyệt)</span>
                 </div>
                 <p className="text-[11px] text-amber-800 leading-relaxed">
-                  Trường hợp yêu cầu không được duyệt, Super Admin sẽ hoàn trả 100% số tiền về tài khoản ngân hàng này (tương tự chính sách hủy sân hoàn tiền trước 24h).
+                  Trường hợp yêu cầu không được duyệt, Admin sẽ hoàn trả 100% số tiền về tài khoản ngân hàng này (tương tự chính sách hủy sân hoàn tiền trước 24h).
                 </p>
 
                 <div className="grid sm:grid-cols-3 gap-2 pt-1">
@@ -3694,7 +3847,7 @@ export default function TenantDashboard() {
                           refundBankName: e.target.value,
                         }))
                       }
-                      placeholder="VD: Vietcombank, MB..."
+                      placeholder="Tên ngân hàng"
                       className="w-full mt-1 p-2 bg-white border border-amber-200 rounded-xl text-xs focus:outline-none focus:border-amber-500"
                     />
                   </div>
@@ -3711,7 +3864,7 @@ export default function TenantDashboard() {
                         }))
                       }
                       placeholder="Số tài khoản"
-                      className="w-full mt-1 p-2 bg-white border border-amber-200 rounded-xl text-xs font-mono focus:outline-none focus:border-amber-500"
+                      className="w-full mt-1 p-2 bg-white border border-amber-200 rounded-xl text-xs focus:outline-none focus:border-amber-500"
                     />
                   </div>
                   <div>
@@ -3726,8 +3879,8 @@ export default function TenantDashboard() {
                           refundAccountName: e.target.value.toUpperCase(),
                         }))
                       }
-                      placeholder="NGUYEN VAN A"
-                      className="w-full mt-1 p-2 bg-white border border-amber-200 rounded-xl text-xs uppercase focus:outline-none focus:border-amber-500"
+                      placeholder="Tên chủ tài khoản"
+                      className="w-full mt-1 p-2 bg-white border border-amber-200 rounded-xl text-xs focus:outline-none focus:border-amber-500"
                     />
                   </div>
                 </div>
@@ -3743,10 +3896,9 @@ export default function TenantDashboard() {
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-md active:scale-95 flex items-center gap-1.5"
+                  className="px-6 py-2.5 rounded-xl text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 transition shadow-md active:scale-95 flex items-center justify-center"
                 >
-                  <span>✓</span>
-                  <span>Xác nhận & Gửi yêu cầu duyệt</span>
+                  Xác nhận & Gửi yêu cầu duyệt
                 </button>
               </div>
             </form>

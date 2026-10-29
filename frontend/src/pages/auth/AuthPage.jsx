@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
+import { isValidEmail, isValidVNPhone, sanitizePhoneInput } from '../../utils/validators';
 
 export default function AuthPage() {
   const [searchParams] = useSearchParams();
@@ -40,7 +41,7 @@ export default function AuthPage() {
 
   useEffect(() => {
     if (user) {
-      if (user.role === 'SUPER_ADMIN') navigate('/super-admin');
+      if (user.role === 'ADMIN' || user.role === 'ADMIN') navigate('/admin');
       else if (user.role === 'TENANT_ADMIN') {
         if (user.tenantStatus === 'PENDING') navigate('/tenant-pending');
         else navigate('/tenant');
@@ -70,9 +71,19 @@ export default function AuthPage() {
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
+    let finalVal = value;
+    if (type === 'checkbox') {
+      finalVal = checked;
+    } else if (name === 'phone') {
+      finalVal = sanitizePhoneInput(value);
+    } else if (name === 'email') {
+      finalVal = value.trim();
+    } else if (name === 'otpCode') {
+      finalVal = value.trim();
+    }
     setForm((prev) => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : (name === 'otpCode' ? value.trim() : value),
+      [name]: finalVal,
     }));
   };
 
@@ -119,6 +130,13 @@ export default function AuthPage() {
     if (!form.email || !form.email.trim()) {
       return setMessage({ type: 'error', text: 'Vui lòng nhập địa chỉ Email để nhận mã OTP.' });
     }
+    if (!isValidEmail(form.email)) {
+      return setMessage({
+        type: 'error',
+        text: 'Địa chỉ Email không đúng định dạng (Ví dụ: ten@gmail.com hoặc ten@st.phenikaa-uni.edu.vn).'
+      });
+    }
+
     setLoading(true);
     setMessage({ type: '', text: '' });
     try {
@@ -141,9 +159,21 @@ export default function AuthPage() {
     }
   };
 
-  // Đăng ký tài khoản (Kiểm tra khớp mật khẩu & ảnh tải lên)
+  // Đăng ký tài khoản (Kiểm tra định dạng Email, SĐT, khớp mật khẩu & ảnh tải lên)
   const handleRegister = async (e) => {
     e.preventDefault();
+    if (!isValidEmail(form.email)) {
+      return setMessage({
+        type: 'error',
+        text: 'Địa chỉ Email không đúng định dạng (Ví dụ: ten@gmail.com hoặc ten@st.phenikaa-uni.edu.vn).'
+      });
+    }
+    if (!isValidVNPhone(form.phone)) {
+      return setMessage({
+        type: 'error',
+        text: 'Số điện thoại không hợp lệ. Vui lòng nhập đúng 10 chữ số di động VN (đầu 03, 05, 07, 08, 09).'
+      });
+    }
     if (form.password.length < 6) {
       return setMessage({ type: 'error', text: 'Mật khẩu phải có tối thiểu 6 ký tự.' });
     }
@@ -235,8 +265,8 @@ export default function AuthPage() {
       const { token, user } = res.data;
       login(user, token);
 
-      if (user.role === 'SUPER_ADMIN') {
-        navigate('/super-admin');
+      if (user.role === 'ADMIN' || user.role === 'ADMIN') {
+        navigate('/admin');
       } else if (user.role === 'TENANT_ADMIN') {
         if (user.tenantStatus === 'PENDING') navigate('/tenant-pending');
         else navigate('/tenant');
@@ -278,9 +308,8 @@ export default function AuthPage() {
             <span className="group-hover:-translate-x-0.5 transition-transform font-mono">←</span>
             <span>Khám phá Sân</span>
           </button>
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
-            <span>🏸</span>
-            <span>Badminton SaaS Portal</span>
+          <span className="inline-flex items-center text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200/80 px-2.5 py-0.5 rounded-full">
+            BadmintonHub
           </span>
         </div>
 
@@ -292,12 +321,13 @@ export default function AuthPage() {
             {mode === 'REGISTER_TENANT' && 'Đăng ký Đối tác Quản lý sân'}
             {mode === 'FORGOT_PASSWORD' && 'Khôi phục mật khẩu'}
           </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            {mode === 'LOGIN' && 'Đăng nhập để vào bảng điều khiển tương ứng với vai trò của bạn.'}
-            {mode === 'REGISTER_USER' && 'Xác thực email bằng OTP để đặt lịch sân và nhận ưu đãi Học sinh / Sinh viên.'}
-            {mode === 'REGISTER_TENANT' && 'Đưa cụm sân cầu lông của bạn lên nền tảng và quản lý vận hành tự động.'}
-            {mode === 'FORGOT_PASSWORD' && 'Nhập email của bạn để nhận mã OTP 6 số và thiết lập lại mật khẩu mới.'}
-          </p>
+          {mode !== 'LOGIN' && (
+            <p className="text-xs text-slate-500 mt-1">
+              {mode === 'REGISTER_USER' && 'Xác thực email bằng OTP để đặt lịch sân và nhận ưu đãi Học sinh / Sinh viên.'}
+              {mode === 'REGISTER_TENANT' && 'Đưa cụm sân cầu lông của bạn lên nền tảng và quản lý vận hành tự động.'}
+              {mode === 'FORGOT_PASSWORD' && 'Nhập email của bạn để nhận mã OTP 6 số và thiết lập lại mật khẩu mới.'}
+            </p>
+          )}
         </div>
 
         {/* THANH CHUYỂN ĐỔI 2 CỘT: ĐĂNG NHẬP & ĐĂNG KÝ (CÓ POP-UP KHI DI CHUỘT) */}
@@ -357,13 +387,12 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => switchMode('REGISTER_USER')}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition flex items-start gap-3 ${
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition ${
                       mode === 'REGISTER_USER'
                         ? 'bg-emerald-50 text-emerald-800'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <span className="text-base mt-0.5">🏸</span>
                     <div>
                       <div className="font-bold text-xs text-slate-900">Dành cho Người chơi</div>
                       <div className="text-[11px] font-normal text-slate-500">
@@ -377,13 +406,12 @@ export default function AuthPage() {
                   <button
                     type="button"
                     onClick={() => switchMode('REGISTER_TENANT')}
-                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition flex items-start gap-3 ${
+                    className={`w-full text-left px-3.5 py-2.5 rounded-xl transition ${
                       mode === 'REGISTER_TENANT'
                         ? 'bg-emerald-50 text-emerald-800'
                         : 'hover:bg-slate-50 text-slate-700'
                     }`}
                   >
-                    <span className="text-base mt-0.5">🏟️</span>
                     <div>
                       <div className="font-bold text-xs text-slate-900">Đối tác Quản lý sân</div>
                       <div className="text-[11px] font-normal text-slate-500">
@@ -400,13 +428,12 @@ export default function AuthPage() {
         {/* THÔNG BÁO LỖI / THÀNH CÔNG */}
         {message.text && (
           <div
-            className={`p-3.5 rounded-2xl text-xs mb-5 font-semibold flex items-center gap-2.5 ${
+            className={`p-3.5 rounded-2xl text-xs mb-5 font-semibold flex items-center ${
               message.type === 'error'
                 ? 'bg-red-50 text-red-700 border border-red-200'
                 : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
             }`}
           >
-            <span className="text-base">{message.type === 'error' ? '⚠️' : '✅'}</span>
             <span>{message.text}</span>
           </div>
         )}
@@ -422,7 +449,7 @@ export default function AuthPage() {
                 required
                 value={form.email}
                 onChange={handleChange}
-                placeholder="nhap@email.com"
+                placeholder="email@example.com"
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
               />
             </div>
@@ -444,7 +471,7 @@ export default function AuthPage() {
                 required
                 value={form.password}
                 onChange={handleChange}
-                placeholder="••••••••"
+                placeholder="Mật khẩu"
                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
               />
             </div>
@@ -470,35 +497,72 @@ export default function AuthPage() {
                 required
                 value={form.fullName}
                 onChange={handleChange}
-                placeholder="Nguyễn Văn A"
+                placeholder="Họ và tên"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
             <div className="grid sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Email (Nhận mã OTP)</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-bold text-slate-700">Email (Nhận mã OTP)</label>
+                  {form.email.trim() && (
+                    <span className={`text-[10px] font-bold ${isValidEmail(form.email) ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {isValidEmail(form.email) ? 'Email hợp lệ' : 'Định dạng chưa đúng'}
+                    </span>
+                  )}
+                </div>
                 <input
                   type="email"
                   name="email"
                   required
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="email@gmail.com"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="email@example.com"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm transition focus:bg-white focus:outline-none focus:ring-2 ${
+                    form.email.trim()
+                      ? isValidEmail(form.email)
+                        ? 'border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-400 focus:ring-red-400/20'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
                 />
+                {form.email.trim() && !isValidEmail(form.email) && (
+                  <p className="text-[11px] text-red-500 mt-1 leading-tight">
+                    Cần có ký tự @ và đuôi tên miền (VD: .com, .edu.vn).
+                  </p>
+                )}
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Số điện thoại</label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-bold text-slate-700">Số điện thoại</label>
+                  {form.phone.trim() && (
+                    <span className={`text-[10px] font-bold ${isValidVNPhone(form.phone) ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {isValidVNPhone(form.phone) ? 'Hợp lệ (10 số)' : `${form.phone.length}/10 số`}
+                    </span>
+                  )}
+                </div>
                 <input
-                  type="text"
+                  type="tel"
                   name="phone"
                   required
+                  maxLength={10}
                   value={form.phone}
                   onChange={handleChange}
-                  placeholder="0987654321"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="0987 654 321"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm transition focus:bg-white focus:outline-none focus:ring-2 ${
+                    form.phone.trim()
+                      ? isValidVNPhone(form.phone)
+                        ? 'border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-400 focus:ring-red-400/20'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
                 />
+                {form.phone.trim() && !isValidVNPhone(form.phone) && (
+                  <p className="text-[11px] text-red-500 mt-1 leading-tight">
+                    SĐT di động VN gồm 10 số (đầu 03, 05, 07, 08, 09).
+                  </p>
+                )}
               </div>
             </div>
 
@@ -512,7 +576,7 @@ export default function AuthPage() {
                   required
                   value={form.password}
                   onChange={handleChange}
-                  placeholder="Tối thiểu 6 ký tự"
+                  placeholder="Mật khẩu (tối thiểu 6 ký tự)"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -524,7 +588,7 @@ export default function AuthPage() {
                   required
                   value={form.confirmPassword}
                   onChange={handleChange}
-                  placeholder="Nhập lại mật khẩu"
+                  placeholder="Xác nhận mật khẩu mới"
                   className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 ${
                     passwordMismatch
                       ? 'border-red-400 focus:ring-red-500'
@@ -535,7 +599,7 @@ export default function AuthPage() {
             </div>
             {passwordMismatch && (
               <p className="text-[11px] text-red-600 font-semibold -mt-2">
-                ⚠️ Mật khẩu nhập lại chưa khớp với mật khẩu khởi tạo.
+                Mật khẩu nhập lại chưa khớp với mật khẩu khởi tạo.
               </p>
             )}
 
@@ -550,13 +614,13 @@ export default function AuthPage() {
                     onChange={handleChange}
                     className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500"
                   />
-                  <span>🎓 Tôi là Học sinh / Sinh viên (Nhận ưu đãi giảm giá tự động)</span>
+                  <span>Tôi là Học sinh / Sinh viên (Nhận ưu đãi giảm giá tự động)</span>
                 </label>
 
                 {form.isStudent && (
                   <div className="pt-1 space-y-2">
                     <label className="block text-[11px] font-semibold text-emerald-800">
-                      Tải lên ảnh chụp Thẻ Học sinh / Sinh viên để Super Admin duyệt:
+                      Tải lên ảnh chụp Thẻ Học sinh / Sinh viên để Admin duyệt:
                     </label>
 
                     <label className="flex flex-col items-center justify-center w-full p-4 bg-white border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-50/40 transition">
@@ -568,12 +632,14 @@ export default function AuthPage() {
                             className="max-h-36 mx-auto rounded-lg border border-slate-200 object-contain"
                           />
                           <p className="text-[11px] font-bold text-emerald-700">
-                            ✓ {form.studentCardFileName} (Bấm để đổi ảnh khác)
+                            {form.studentCardFileName} (Bấm để đổi ảnh khác)
                           </p>
                         </div>
                       ) : (
                         <div className="text-center py-2">
-                          <span className="text-2xl">📷</span>
+                          <svg className="w-8 h-8 mx-auto text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
                           <p className="text-xs font-bold text-emerald-800 mt-1">
                             Bấm để chọn ảnh thẻ từ thiết bị
                           </p>
@@ -596,9 +662,8 @@ export default function AuthPage() {
             {mode === 'REGISTER_USER' && (
               <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-extrabold text-slate-800">
-                    <span>🏦</span>
-                    <span>Tài khoản Ngân hàng nhận tiền hoàn (Tùy chọn)</span>
+                  <div className="text-xs font-extrabold text-slate-800">
+                    Tài khoản Ngân hàng nhận tiền hoàn (Tùy chọn)
                   </div>
                   <p className="text-[11px] text-slate-500 mt-0.5">
                     Hệ thống sẽ chuyển tiền hoàn 100% về tài khoản này nếu bạn hủy lịch trước 24 tiếng.
@@ -613,7 +678,7 @@ export default function AuthPage() {
                       name="bankName"
                       value={form.bankName}
                       onChange={handleChange}
-                      placeholder="VD: MB Bank, Techcombank..."
+                      placeholder="Tên ngân hàng"
                       className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
@@ -624,8 +689,8 @@ export default function AuthPage() {
                       name="bankAccountNumber"
                       value={form.bankAccountNumber}
                       onChange={handleChange}
-                      placeholder="VD: 19034889928282"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500"
+                      placeholder="Số tài khoản"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                   <div>
@@ -635,8 +700,8 @@ export default function AuthPage() {
                       name="bankAccountName"
                       value={form.bankAccountName}
                       onChange={handleChange}
-                      placeholder="VD: NGUYEN VAN A"
-                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs uppercase font-bold focus:ring-2 focus:ring-emerald-500"
+                      placeholder="Tên chủ tài khoản"
+                      className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
                 </div>
@@ -646,9 +711,8 @@ export default function AuthPage() {
             {/* THÔNG TIN ĐỐI TÁC QUẢN LÝ SÂN */}
             {mode === 'REGISTER_TENANT' && (
               <div className="bg-amber-50/80 p-4 rounded-2xl border border-amber-200 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-extrabold text-amber-900">
-                  <span>🏟️</span>
-                  <span>Thông tin Cụm sân đăng ký đối tác (Chờ Super Admin duyệt)</span>
+                <div className="text-xs font-extrabold text-amber-900">
+                  Thông tin Cụm sân đăng ký đối tác (Chờ Admin duyệt)
                 </div>
                 <div className="grid sm:grid-cols-2 gap-2.5">
                   <div>
@@ -659,7 +723,7 @@ export default function AuthPage() {
                       required
                       value={form.tenantName}
                       onChange={handleChange}
-                      placeholder="VD: Sân Cầu Lông Đông Đô"
+                      placeholder="Tên cụm sân"
                       className="w-full px-3 py-2 border border-amber-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                     />
                   </div>
@@ -688,7 +752,7 @@ export default function AuthPage() {
                     required
                     value={form.address}
                     onChange={handleChange}
-                    placeholder="Số 102 Chùa Láng, Hà Nội"
+                    placeholder="Địa chỉ cụm sân"
                     className="w-full px-3 py-2 border border-amber-200 rounded-xl text-xs bg-white focus:outline-none focus:ring-2 focus:ring-amber-500"
                   />
                 </div>
@@ -705,8 +769,8 @@ export default function AuthPage() {
                   required
                   value={form.otpCode}
                   onChange={handleChange}
-                  placeholder="Nhập mã OTP 6 số..."
-                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-widest focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Mã OTP 6 số"
+                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal placeholder:font-normal focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
                 <button
                   type="button"
@@ -739,9 +803,16 @@ export default function AuthPage() {
         {mode === 'FORGOT_PASSWORD' && (
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Email tài khoản đã đăng ký
-              </label>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="block text-xs font-bold text-slate-700">
+                  Email tài khoản đã đăng ký
+                </label>
+                {form.email.trim() && (
+                  <span className={`text-[10px] font-bold ${isValidEmail(form.email) ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {isValidEmail(form.email) ? 'Email hợp lệ' : 'Định dạng chưa đúng'}
+                  </span>
+                )}
+              </div>
               <div className="flex gap-2">
                 <input
                   type="email"
@@ -749,8 +820,14 @@ export default function AuthPage() {
                   required
                   value={form.email}
                   onChange={handleChange}
-                  placeholder="nhap@gmail.com"
-                  className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="email@example.com"
+                  className={`flex-1 px-4 py-2.5 bg-slate-50 border rounded-xl text-sm transition focus:bg-white focus:outline-none focus:ring-2 ${
+                    form.email.trim()
+                      ? isValidEmail(form.email)
+                        ? 'border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-400 focus:ring-red-400/20'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
                 />
                 <button
                   type="button"
@@ -767,6 +844,11 @@ export default function AuthPage() {
                     : 'Gửi mã OTP'}
                 </button>
               </div>
+              {form.email.trim() && !isValidEmail(form.email) && (
+                <p className="text-[11px] text-red-500 mt-1 leading-tight">
+                  Cần có ký tự @ và đuôi tên miền (VD: .com, .edu.vn).
+                </p>
+              )}
             </div>
 
             <div>
@@ -779,8 +861,8 @@ export default function AuthPage() {
                 required
                 value={form.otpCode}
                 onChange={handleChange}
-                placeholder="Nhập 6 chữ số OTP..."
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-widest focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder="Mã OTP 6 số"
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-mono tracking-widest placeholder:font-sans placeholder:tracking-normal placeholder:font-normal focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
 
@@ -793,7 +875,7 @@ export default function AuthPage() {
                   required
                   value={form.password}
                   onChange={handleChange}
-                  placeholder="Tối thiểu 6 ký tự"
+                  placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
                   className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -816,7 +898,7 @@ export default function AuthPage() {
             </div>
             {passwordMismatch && (
               <p className="text-[11px] text-red-600 font-semibold -mt-2">
-                ⚠️ Mật khẩu nhập lại chưa khớp.
+                Mật khẩu nhập lại chưa khớp.
               </p>
             )}
 

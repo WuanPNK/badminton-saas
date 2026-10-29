@@ -152,13 +152,11 @@ export default function TenantBookingPage() {
           });
         } else if (payload.type === 'BOOKING_CREATED') {
           toast('Một vị trí sân vừa có người giữ chỗ!', {
-            icon: '⏳',
             id: 'realtime-hold',
             duration: 2500,
           });
         } else if (payload.type === 'BOOKING_CANCELLED') {
           toast('Một vị trí sân vừa được giải phóng!', {
-            icon: '🆓',
             id: 'realtime-released',
             duration: 2500,
           });
@@ -507,17 +505,12 @@ export default function TenantBookingPage() {
 
             <div className="text-[11px] font-bold bg-white/10 px-3 py-1 rounded-full">
               {user?.studentStatus === 'VERIFIED'
-                ? '🎓 Đã kích hoạt tự động giảm giá Học sinh / Sinh viên'
+                ? 'Đã kích hoạt tự động giảm giá Học sinh / Sinh viên'
                 : 'Tài khoản Khách tiêu chuẩn'}
             </div>
           </div>
         </header>
 
-        {/* DÒNG LƯU Ý HƯỚNG DẪN */}
-        <div className="bg-[#FFFBEB] border-b border-amber-200 px-4 py-2 text-center text-xs text-slate-700">
-          <strong className="text-amber-700">Lưu ý:</strong> Bấm trực tiếp vào các ô 30 phút màu trắng trên cùng 1 hàng sân để chọn giờ chơi (tối thiểu 2 ô = 1 giờ). Nếu bạn cần đặt lịch cố định tháng hoặc tổ chức giải đấu, vui lòng liên hệ Hotline:{' '}
-          <strong className="text-emerald-800">{tenantDetail.tenant.phone_contact}</strong>
-        </div>
 
         {/* ===================================================================== */}
         {/* BẢNG LƯỚI ĐẶT SÂN TRỰC QUAN 30 PHÚT (TIMELINE GRID - HÌNH 7)           */}
@@ -557,7 +550,7 @@ export default function TenantBookingPage() {
                             : 'bg-emerald-200/80 text-emerald-800'
                         }`}
                       >
-                        {court.type}
+                        {court.type === 'VIP' ? 'Sân VIP' : 'Tiêu chuẩn'}
                       </span>
                     </td>
 
@@ -576,11 +569,15 @@ export default function TenantBookingPage() {
                         cellContent = <span className="text-[10px] font-bold">Sự kiện</span>;
                       } else if (state.status === 'MAINTENANCE') {
                         cellClass = 'bg-slate-300 text-slate-700 cursor-not-allowed font-medium';
-                        cellContent = <span className="text-[10px]">🔧 Bảo trì</span>;
+                        cellContent = <span className="text-[10px]">Bảo trì</span>;
                       } else if (state.status === 'SELECTED') {
                         cellClass =
                           'bg-emerald-500 text-white font-bold cursor-pointer ring-1 ring-emerald-700';
-                        cellContent = <span className="text-[11px]">✓</span>;
+                        cellContent = (
+                          <svg className="w-3.5 h-3.5 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" />
+                          </svg>
+                        );
                       }
 
                       return (
@@ -621,7 +618,7 @@ export default function TenantBookingPage() {
             {selectedCourtId && startSlot && endSlot ? (
               <div className="flex flex-wrap items-center gap-3 bg-white px-4 py-2 rounded-2xl shadow-sm border border-emerald-200 text-xs">
                 <span className="font-extrabold text-emerald-900">
-                  🏸 Đang chọn: {selectedCourtObj?.name} ({startSlot} → {endSlot})
+                  Đang chọn: {selectedCourtObj?.name} ({startSlot} → {endSlot})
                 </span>
                 <button
                   type="button"
@@ -632,14 +629,10 @@ export default function TenantBookingPage() {
                   }}
                   className="text-red-600 font-bold hover:underline"
                 >
-                  ✕ Xóa chọn
+                  Xóa chọn
                 </button>
               </div>
-            ) : (
-              <div className="text-xs text-slate-600 font-medium">
-                💡 Mẹo: Bấm vào ô bắt đầu và bấm tiếp vào ô kết thúc trên cùng 1 hàng sân để chọn nhiều block 30 phút.
-              </div>
-            )}
+            ) : null}
 
             <div className="bg-white px-4 py-2 rounded-full shadow-sm border border-slate-200 flex items-center gap-3 ml-auto">
               <span className="text-[11px] font-bold text-slate-500">Thu phóng lưới:</span>
@@ -686,14 +679,14 @@ export default function TenantBookingPage() {
                   </strong>
                   {pricePreview.isStudentApplied && (
                     <span className="ml-2 bg-emerald-100 text-emerald-800 text-[11px] px-2 py-0.5 rounded-full font-bold">
-                      🎓 Đã giảm HSSV -{Number(pricePreview.discountApplied).toLocaleString()}đ
+                      Đã giảm HSSV -{Number(pricePreview.discountApplied).toLocaleString()}đ
                     </span>
                   )}
                 </div>
               </div>
             ) : (
               <span className="text-slate-500 font-medium">
-                Vui lòng chọn ít nhất 2 ô 30 phút liên tiếp (tối thiểu 1 giờ) trên bảng lưới để tiếp tục.
+                Chọn giờ chơi trên bảng lưới (tối thiểu 1 giờ) để tiếp tục.
               </span>
             )}
           </div>
@@ -726,7 +719,7 @@ export default function TenantBookingPage() {
                 onClick={() => setShowInfoModal(false)}
                 className="text-xs font-bold text-slate-500 hover:text-slate-900"
               >
-                ✕ Đóng
+                Đóng
               </button>
             </div>
 
@@ -773,11 +766,11 @@ export default function TenantBookingPage() {
             {/* HEADER MODAL VỚI ĐỒNG HỒ ĐẾM NGƯỢC */}
             <div>
               <div className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200/90 text-xs font-black px-3.5 py-1 rounded-full mb-2">
-                <span className="animate-pulse">⏳</span>
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block"></span>
                 <span>Thời gian giữ chỗ: {formatCountdown(countdown)}</span>
               </div>
               <h3 className="text-lg font-black text-slate-900">
-                Thanh toán 100% Tiền Sân VietQR
+                Thanh toán qua VietQR
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
                 Mã đơn: <strong className="text-slate-900 font-mono">#{paymentData.bookingCode}</strong> | Sân: <strong className="text-slate-900">{paymentData.courtName}</strong>
@@ -811,7 +804,7 @@ export default function TenantBookingPage() {
                   onClick={() => copyToClipboard(paymentData.accountNumber, 'Số tài khoản')}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-lg text-[11px] font-bold border border-slate-200 transition cursor-pointer"
                 >
-                  {copiedField === 'Số tài khoản' ? '✓ Đã chép' : 'Sao chép'}
+                  {copiedField === 'Số tài khoản' ? 'Đã sao chép' : 'Sao chép'}
                 </button>
               </div>
 
@@ -833,7 +826,7 @@ export default function TenantBookingPage() {
                   onClick={() => copyToClipboard(String(paymentData.finalPrice), 'Số tiền')}
                   className="px-2.5 py-1 bg-slate-100 hover:bg-emerald-50 text-slate-700 hover:text-emerald-700 rounded-lg text-[11px] font-bold border border-slate-200 transition cursor-pointer"
                 >
-                  {copiedField === 'Số tiền' ? '✓ Đã chép' : 'Sao chép'}
+                  {copiedField === 'Số tiền' ? 'Đã sao chép' : 'Sao chép'}
                 </button>
               </div>
 
@@ -848,7 +841,7 @@ export default function TenantBookingPage() {
                   onClick={() => copyToClipboard(paymentData.transferContent, 'Nội dung chuyển khoản')}
                   className="px-2.5 py-1 bg-emerald-600 text-white rounded-lg text-[11px] font-bold shadow-sm hover:bg-emerald-700 transition cursor-pointer"
                 >
-                  {copiedField === 'Nội dung chuyển khoản' ? '✓ Đã chép' : 'Sao chép'}
+                  {copiedField === 'Nội dung chuyển khoản' ? 'Đã sao chép' : 'Sao chép'}
                 </button>
               </div>
             </div>
@@ -860,14 +853,16 @@ export default function TenantBookingPage() {
                 onClick={handleClosePaymentModal}
                 className="flex-1 py-3 border border-slate-300 hover:bg-slate-100 rounded-2xl text-xs font-bold text-slate-700 transition cursor-pointer"
               >
-                ✕ Hủy & Đóng
+                Hủy & Đóng
               </button>
               <button
                 type="button"
                 onClick={handleMockConfirmPayment}
                 className="flex-[2] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-black py-3 rounded-2xl text-xs shadow-lg shadow-emerald-600/25 active:scale-95 transition cursor-pointer flex items-center justify-center gap-1.5"
               >
-                <span>✓</span>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M5 13l4 4L19 7" />
+                </svg>
                 <span>Mô phỏng: Đã chuyển khoản</span>
               </button>
             </div>

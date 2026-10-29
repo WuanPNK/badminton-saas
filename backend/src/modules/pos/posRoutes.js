@@ -28,5 +28,7 @@ router.delete('/products/:productId', authorizeRoles('TENANT_ADMIN'), posControl
 
 router.post('/orders', posController.createPosOrder);
 router.get('/orders', posController.getPosOrders);
+router.put('/orders/:orderId', posController.updatePosOrder);
+router.put('/orders/:orderId/cancel', posController.cancelPosOrder);
 
 module.exports = router;

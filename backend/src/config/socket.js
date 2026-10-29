@@ -16,7 +16,6 @@ const initSocket = (httpServer) => {
     socket.on('join_tenant', (tenantId) => {
       if (tenantId) {
         socket.join(`tenant_${tenantId}`);
-        // console.log(`[Socket.io] Client ${socket.id} joined room tenant_${tenantId}`);
       }
     });
 
@@ -26,9 +25,20 @@ const initSocket = (httpServer) => {
       }
     });
 
-    socket.on('disconnect', () => {
-      // console.log(`[Socket.io] Client disconnected: ${socket.id}`);
+    // Client tham gia phòng theo người dùng để nhận chuông thông báo
+    socket.on('join_user', (userId) => {
+      if (userId) {
+        socket.join(`user_${userId}`);
+      }
     });
+
+    socket.on('leave_user', (userId) => {
+      if (userId) {
+        socket.leave(`user_${userId}`);
+      }
+    });
+
+    socket.on('disconnect', () => {});
   });
 
   console.log('✓ Socket.io đã được khởi tạo thành công!');
@@ -37,6 +47,15 @@ const initSocket = (httpServer) => {
 
 const getIO = () => {
   return io;
+};
+
+/**
+ * Phát thông báo in-app trực tiếp tới người dùng qua socket
+ */
+const sendSocketNotification = (userId, notification) => {
+  if (io && userId) {
+    io.to(`user_${userId}`).emit('new_notification', notification);
+  }
 };
 
 /**
@@ -64,5 +83,6 @@ const notifyBookingUpdate = (tenantId, payload) => {
 module.exports = {
   initSocket,
   getIO,
+  sendSocketNotification,
   notifyBookingUpdate,
 };

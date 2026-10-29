@@ -2,7 +2,7 @@ const db = require('../config/db');
 
 /**
  * Tự động xóa các tài khoản Chủ sân (TENANT_ADMIN) và Cụm sân ở trạng thái PENDING
- * đã quá hạn 7 ngày kể từ ngày đăng ký mà chưa được Super Admin phê duyệt.
+ * đã quá hạn 7 ngày kể từ ngày đăng ký mà chưa được Admin phê duyệt.
  */
 async function cleanupExpiredPendingTenants() {
   try {

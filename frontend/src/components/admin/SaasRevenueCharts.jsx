@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
-import { exportSuperAdminRevenueToExcel, exportSuperAdminRevenueToCSV } from '../../utils/excelExport';
+import { exportAdminRevenueToExcel, exportAdminRevenueToCSV } from '../../utils/excelExport';
 
 export default function SaasRevenueCharts({ dashboardData }) {
   const [hoveredMonth, setHoveredMonth] = useState(null);
@@ -9,11 +9,11 @@ export default function SaasRevenueCharts({ dashboardData }) {
 
   const handleExportExcel = async () => {
     setIsExporting(true);
-    const toastId = toast.loading('Đang trích xuất toàn bộ sổ cái hợp đồng SaaS...');
+    const toastId = toast.loading('Đang trích xuất toàn bộ sổ cái hợp đồng phần mềm...');
     try {
-      const res = await axiosClient.get('/super-admin/revenue-export');
+      const res = await axiosClient.get('/admin/revenue-export');
       if (res.data?.success && res.data?.exportData) {
-        await exportSuperAdminRevenueToExcel(res.data.exportData);
+        await exportAdminRevenueToExcel(res.data.exportData);
         toast.success('Đã xuất file Excel SaaS (.xlsx) thành công!', { id: toastId });
       } else {
         toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });
@@ -30,9 +30,9 @@ export default function SaasRevenueCharts({ dashboardData }) {
     setIsExporting(true);
     const toastId = toast.loading('Đang chuẩn bị file CSV...');
     try {
-      const res = await axiosClient.get('/super-admin/revenue-export');
+      const res = await axiosClient.get('/admin/revenue-export');
       if (res.data?.success && res.data?.exportData) {
-        exportSuperAdminRevenueToCSV(res.data.exportData);
+        exportAdminRevenueToCSV(res.data.exportData);
         toast.success('Đã xuất file CSV thành công!', { id: toastId });
       } else {
         toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });
@@ -80,11 +80,13 @@ export default function SaasRevenueCharts({ dashboardData }) {
         <div>
           <div className="flex items-center gap-2.5">
             <span className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black text-sm border border-emerald-100">
-              📊
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
             </span>
             <h2 className="text-base font-extrabold text-slate-900">Báo Cáo Doanh Thu Nền Tảng & Sổ Cái Hợp Đồng</h2>
             <span className="hidden sm:inline-flex bg-emerald-100/70 text-emerald-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full border border-emerald-200">
-              Kế toán Super Admin
+              Kế toán Admin
             </span>
           </div>
           <p className="text-xs text-slate-500 mt-1">
@@ -100,7 +102,9 @@ export default function SaasRevenueCharts({ dashboardData }) {
             className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold rounded-xl transition shadow-sm hover:shadow flex items-center gap-2 disabled:opacity-50"
             title="Xuất file Excel (.xlsx) gồm 3 Sheets: Tổng quan tài chính SaaS, Sổ cái hợp đồng, Doanh thu theo tháng"
           >
-            <span className="text-sm">📗</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
             <span>{isExporting ? 'Đang trích xuất...' : 'Xuất Báo Cáo Excel (.xlsx)'}</span>
           </button>
 
@@ -111,7 +115,9 @@ export default function SaasRevenueCharts({ dashboardData }) {
             className="px-3.5 py-2.5 bg-slate-50 hover:bg-slate-100 active:scale-95 text-slate-700 text-xs font-bold rounded-xl transition border border-slate-200/80 flex items-center gap-1.5 disabled:opacity-50"
             title="Xuất file CSV chuẩn UTF-8"
           >
-            <span>📄</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
             <span>Xuất CSV</span>
           </button>
         </div>
@@ -119,7 +125,7 @@ export default function SaasRevenueCharts({ dashboardData }) {
 
       {/* 1. HÀNG THỐNG KÊ TỔNG QUAN (KPI CARDS) */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* KPI 1: Tổng doanh thu SaaS */}
+        {/* KPI 1: Tổng doanh thu phần mềm */}
         <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-100 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between">
@@ -127,7 +133,9 @@ export default function SaasRevenueCharts({ dashboardData }) {
                 Tổng Thu Gói Cước SaaS
               </span>
               <span className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-sm font-black">
-                💰
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </span>
             </div>
             <p className="text-2xl sm:text-3xl font-black text-emerald-700 mt-2">
@@ -135,7 +143,7 @@ export default function SaasRevenueCharts({ dashboardData }) {
             </p>
           </div>
           <p className="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-100 flex items-center gap-1.5">
-            <span className="text-emerald-600 font-bold">✓</span> Doanh thu tích lũy từ ngày thành lập sàn
+            <span className="text-emerald-600 font-bold">●</span> Doanh thu tích lũy từ ngày thành lập sàn
           </p>
         </div>
 
@@ -147,7 +155,9 @@ export default function SaasRevenueCharts({ dashboardData }) {
                 Doanh Thu Tháng Này
               </span>
               <span className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-black">
-                📅
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
               </span>
             </div>
             <p className="text-2xl sm:text-3xl font-black text-blue-700 mt-2">
@@ -167,7 +177,9 @@ export default function SaasRevenueCharts({ dashboardData }) {
                 Số Hợp Đồng Đã Ký
               </span>
               <span className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-sm font-black">
-                📝
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
               </span>
             </div>
             <p className="text-2xl sm:text-3xl font-black text-slate-900 mt-2">
@@ -188,7 +200,9 @@ export default function SaasRevenueCharts({ dashboardData }) {
                 Giá Trị Hợp Đồng TB (ARPU)
               </span>
               <span className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center text-sm font-black">
-                🎯
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                </svg>
               </span>
             </div>
             <p className="text-2xl sm:text-3xl font-black text-purple-700 mt-2">
@@ -329,7 +343,7 @@ export default function SaasRevenueCharts({ dashboardData }) {
           </div>
 
           <div className="mt-5 pt-4 border-t border-slate-100 text-[11px] text-slate-500">
-            💡 <strong>Phân tích thị trường:</strong> Gói Chuyên Nghiệp (Pro SaaS) đem lại hơn{' '}
+            <strong>Phân tích thị trường:</strong> Gói Chuyên Nghiệp (Pro SaaS) đem lại hơn{' '}
             <strong>65%</strong> tổng doanh thu nhờ tích hợp tính năng Bảng giá động & Quản lý bán hàng POS.
           </div>
         </div>
@@ -442,7 +456,7 @@ export default function SaasRevenueCharts({ dashboardData }) {
                       </td>
                       <td className="py-3 text-right">
                         <span className="bg-emerald-100 text-emerald-800 font-bold px-2.5 py-0.5 rounded-full text-[10px]">
-                          ✓ ĐÃ THU
+                          Đã thu
                         </span>
                       </td>
                     </tr>

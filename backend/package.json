@@ -2,11 +2,10 @@
   "name": "backend",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "nodemon --watch src --watch .env src/app.js",
-    "init-db": "node src/scripts/initDb.js"
+    "dev": "nodemon --watch src --watch .env src/app.js"
   },
   "keywords": [],
   "type": "commonjs",

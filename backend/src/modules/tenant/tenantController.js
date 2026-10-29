@@ -1,3 +1,4 @@
+const { notifyAdmins } = require('../notification/notificationService');
 const db = require('../../config/db');
 const bcrypt = require('bcryptjs');
 
@@ -7,7 +8,7 @@ const bcrypt = require('bcryptjs');
 
 // 1. Lấy danh sách tất cả cụm sân đang ACTIVE (Kèm lọc theo Quận & Từ khóa)
 exports.getMarketplaceTenants = async (req, res) => {
-  const { district, search } = req.query;
+  const { district, districts, search } = req.query;
 
   try {
     let queryText = `
@@ -23,14 +24,32 @@ exports.getMarketplaceTenants = async (req, res) => {
     `;
     const params = [];
 
-    if (district) {
-      params.push(district);
-      queryText += ` AND LOWER(t.district) = LOWER($${params.length})`;
+    // Hỗ trợ lọc theo 1 hoặc nhiều quận đồng thời
+    let districtList = [];
+    if (districts) {
+      districtList = Array.isArray(districts)
+        ? districts
+        : districts.split(',').map((d) => d.trim()).filter(Boolean);
+    } else if (district) {
+      districtList = Array.isArray(district)
+        ? district
+        : district.split(',').map((d) => d.trim()).filter(Boolean);
+    }
+
+    if (districtList.length > 0) {
+      const normalizedDistricts = districtList.map((d) =>
+        d.replace(/^quận\s+/i, '').trim().toLowerCase()
+      );
+      params.push(normalizedDistricts);
+      queryText += ' AND (' +
+        "REPLACE(LOWER(t.district), 'quận ', '') = ANY($" + params.length + '::text[]) ' +
+        'OR LOWER(t.district) = ANY($' + params.length + '::text[])' +
+      ')';
     }
 
     if (search) {
-      params.push(`%${search}%`);
-      queryText += ` AND (t.name ILIKE $${params.length} OR t.address ILIKE $${params.length})`;
+      params.push('%' + search + '%');
+      queryText += ' AND (t.name ILIKE $' + params.length + ' OR t.address ILIKE $' + params.length + ')';
     }
 
     queryText += ` GROUP BY t.id ORDER BY t.created_at DESC`;
@@ -1075,6 +1094,13 @@ exports.requestSubscription = async (req, res) => {
         refundAccountName || ''
       ]
     );
+
+    notifyAdmins({
+      type: 'SAAS_PENDING',
+      title: 'Đăng ký gói SaaS mới',
+      message: `Cụm sân vừa gửi yêu cầu đăng ký gói ${plan.name} (${billingCycle}). Vui lòng kiểm tra và duyệt.`,
+      link: '/admin',
+    });
 
     res.status(201).json({
       success: true,

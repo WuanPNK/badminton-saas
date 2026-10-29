@@ -26,7 +26,7 @@ DROP TYPE IF EXISTS court_type CASCADE;
 -- ==========================================
 -- 1. KHỞI TẠO CÁC KIỂU DỮ LIỆU CỐ ĐỊNH (ENUMS)
 -- ==========================================
-CREATE TYPE role_type AS ENUM ('SUPER_ADMIN', 'TENANT_ADMIN', 'STAFF', 'USER');
+CREATE TYPE role_type AS ENUM ('ADMIN', 'TENANT_ADMIN', 'STAFF', 'USER');
 CREATE TYPE approval_status AS ENUM ('PENDING', 'ACTIVE', 'LOCKED', 'PUBLISHED', 'REJECTED');
 CREATE TYPE student_status AS ENUM ('NONE', 'PENDING_APPROVAL', 'VERIFIED', 'REJECTED');
 CREATE TYPE discount_type AS ENUM ('NONE', 'SYSTEM_DEFAULT_20', 'CUSTOM_FIXED_OFF', 'CUSTOM_FLAT_RATE');
@@ -35,10 +35,10 @@ CREATE TYPE booking_status AS ENUM ('PENDING', 'CONFIRMED', 'COMPLETED', 'PENDIN
 CREATE TYPE court_type AS ENUM ('STANDARD', 'VIP');
 
 -- ==========================================
--- 2. NHÓM BẢNG DOANH THU CỦA SUPER ADMIN (SAAS)
+-- 2. NHÓM BẢNG DOANH THU CỦA ADMIN (SAAS)
 -- ==========================================
 
--- Bảng Gói cước phần mềm (Super Admin cấu hình)
+-- Bảng Gói cước phần mềm (Admin cấu hình)
 CREATE TABLE subscription_plans (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) NOT NULL, -- VD: Gói Cơ Bản, Gói Chuyên Nghiệp
@@ -103,7 +103,7 @@ CREATE TABLE tenants (
     address TEXT NOT NULL,
     phone_contact VARCHAR(20) NOT NULL,
     description TEXT,
-    status approval_status DEFAULT 'PENDING', -- Phải được Super Admin duyệt mới sang ACTIVE
+    status approval_status DEFAULT 'PENDING', -- Phải được Admin duyệt mới sang ACTIVE
 
     -- Công tắc Bật/Tắt tính năng (Feature Toggling do Chủ sân tự quyết)
     enable_vip_courts BOOLEAN DEFAULT FALSE,
@@ -129,7 +129,7 @@ CREATE TABLE tenants (
 -- Gắn khóa ngoại tenant_id cho bảng users
 ALTER TABLE users ADD CONSTRAINT fk_user_tenant FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE SET NULL;
 
--- Bảng Lịch sử đóng tiền thuê phần mềm (Tính doanh thu cho Super Admin)
+-- Bảng Lịch sử đóng tiền thuê phần mềm (Tính doanh thu cho Admin)
 CREATE TABLE tenant_subscriptions (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     tenant_id UUID NOT NULL REFERENCES tenants(id),
@@ -160,7 +160,7 @@ CREATE TABLE courts (
     tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     name VARCHAR(50) NOT NULL, -- VD: Sân 1, Sân VIP A
     type court_type DEFAULT 'STANDARD',
-    status approval_status DEFAULT 'PENDING', -- Super Admin duyệt mới chuyển thành PUBLISHED
+    status approval_status DEFAULT 'PENDING', -- Admin duyệt mới chuyển thành PUBLISHED
     is_under_maintenance BOOLEAN DEFAULT FALSE,
     maintenance_start TIMESTAMP,
     maintenance_note TEXT,
@@ -190,10 +190,10 @@ CREATE TABLE bookings (
     tenant_id UUID NOT NULL REFERENCES tenants(id),
     court_id UUID NOT NULL REFERENCES courts(id),
     
-    -- Phân loại: Đặt trực quan (Khách tự đặt) vs Vãng lai/Sự kiện (Lễ tân/Chủ sân tạo)
+    -- Phân loại: Đặt trực quan (Khách tự đặt) vs Sự kiện (Đặt nhiều sân, giảm 20% khi > 3 sân)
     booking_type booking_type NOT NULL DEFAULT 'VISUAL',
     user_id UUID REFERENCES users(id),        -- Có giá trị nếu khách đặt online
-    walk_in_guest_name VARCHAR(100),          -- Dùng khi Lễ tân tạo vé Vãng lai / Sự kiện
+    walk_in_guest_name VARCHAR(100),          -- Tên khách / Tên giải đấu sự kiện
     walk_in_guest_phone VARCHAR(20),
     created_by_staff_id UUID REFERENCES users(id),
 
@@ -210,6 +210,7 @@ CREATE TABLE bookings (
 
     -- Trạng thái đơn & Check-in
     status booking_status DEFAULT 'PENDING',
+    payment_method VARCHAR(30) DEFAULT 'TRANSFER',
     checked_in_at TIMESTAMP,
 
     -- Thông tin phục vụ Hoàn tiền thủ công (Khi hủy trước 24h)
@@ -249,7 +250,12 @@ CREATE TABLE pos_orders (
     total_amount DECIMAL(12, 2) NOT NULL,
     payment_method VARCHAR(30) DEFAULT 'CASH', -- CASH, TRANSFER
     note VARCHAR(255),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    status VARCHAR(20) DEFAULT 'COMPLETED', -- COMPLETED, CANCELLED
+    cancelled_at TIMESTAMP,
+    cancelled_by UUID REFERENCES users(id),
+    cancel_reason VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP
 );
 
 -- Bảng Chi tiết mặt hàng trong Hóa đơn POS
@@ -269,5 +275,59 @@ CREATE TABLE reviews (
     booking_id UUID NOT NULL REFERENCES bookings(id) UNIQUE, -- Ràng buộc 1 đơn COMPLETED chỉ đánh giá 1 lần
     rating INT NOT NULL CHECK (rating >= 1 AND rating <= 5),
     comment TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+
+-- ==========================================
+-- 8. BẢNG THÔNG BÁO HỆ THỐNG (IN-APP NOTIFICATIONS)
+-- ==========================================
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    link VARCHAR(255),
+    is_read BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at DESC);
+
+-- ==========================================
+-- 9. CA TRỰC & BÀN GIAO CA LỄ TÂN
+-- ==========================================
+CREATE TABLE IF NOT EXISTS tenant_shifts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
+    start_time VARCHAR(10) NOT NULL,
+    end_time VARCHAR(10) NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS shift_handovers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    staff_id UUID NOT NULL REFERENCES users(id),
+    shift_id UUID REFERENCES tenant_shifts(id) ON DELETE SET NULL,
+    shift_name VARCHAR(100) NOT NULL,
+    shift_date DATE NOT NULL,
+    start_time VARCHAR(10) NOT NULL,
+    end_time VARCHAR(10) NOT NULL,
+    court_cash DECIMAL(12, 2) DEFAULT 0,
+    court_transfer DECIMAL(12, 2) DEFAULT 0,
+    pos_cash DECIMAL(12, 2) DEFAULT 0,
+    pos_transfer DECIMAL(12, 2) DEFAULT 0,
+    refunds_amount DECIMAL(12, 2) DEFAULT 0,
+    expected_cash DECIMAL(12, 2) NOT NULL,
+    actual_cash DECIMAL(12, 2) NOT NULL,
+    difference DECIMAL(12, 2) NOT NULL,
+    note TEXT,
+    receiver_name VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

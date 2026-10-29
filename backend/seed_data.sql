@@ -22,8 +22,8 @@ RESTART IDENTITY CASCADE;
 -- =========================================================
 INSERT INTO users (id, role, full_name, email, phone, password_hash, is_email_verified, student_status, student_card_url)
 VALUES
-    -- Super Admin
-    ('11111111-1111-1111-1111-111111111111', 'SUPER_ADMIN', 'Quản Trị Viên Nền Tảng', 'superadmin@saas.com', '0901000001', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
+    -- Admin
+    ('11111111-1111-1111-1111-111111111111', 'ADMIN', 'Quản Trị Viên', 'admin@saas.com', '0901000001', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
 
     -- 3 Chủ sân (2 Active, 1 Pending chờ duyệt)
     ('22222222-2222-2222-2222-222222222221', 'TENANT_ADMIN', 'Nguyễn Hoàng Nam (Chủ sân Đông Đô)', 'chusan1@gmail.com', '0902000001', crypt('123456', gen_salt('bf', 10)), TRUE, 'NONE', NULL),
@@ -50,7 +50,8 @@ INSERT INTO tenants (
     id, owner_id, name, district, address, phone_contact, description, status,
     enable_vip_courts, enable_pos_module, enable_advanced_analytics,
     student_discount_type, student_discount_value,
-    qr_bank_name, qr_account_number, qr_account_name
+    qr_bank_name, qr_account_number, qr_account_name,
+    images
 )
 VALUES
     -- Cụm sân 1: Active, bật full tính năng, giảm 20% mặc định hệ thống cho Sinh viên
@@ -65,7 +66,12 @@ VALUES
         'ACTIVE',
         TRUE, TRUE, TRUE,
         'SYSTEM_DEFAULT_20', 0,
-        'MB', '0902000001888', 'NGUYEN HOANG NAM'
+        'MB', '0902000001888', 'NGUYEN HOANG NAM',
+        ARRAY[
+            'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1599474924187-334a4ae5bd3c?auto=format&fit=crop&w=1200&q=80'
+        ]
     ),
     -- Cụm sân 2: Active, giảm thẳng 30.000đ/ca cho Sinh viên
     (
@@ -79,9 +85,13 @@ VALUES
         'ACTIVE',
         FALSE, TRUE, FALSE,
         'CUSTOM_FIXED_OFF', 30000,
-        'VCB', '0011009988776', 'TRAN MINH TUAN'
+        'VCB', '0011009988776', 'TRAN MINH TUAN',
+        ARRAY[
+            'https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?auto=format&fit=crop&w=1200&q=80',
+            'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=1200&q=80'
+        ]
     ),
-    -- Cụm sân 3: Đang PENDING chờ Super Admin duyệt mở khóa
+    -- Cụm sân 3: Đang PENDING chờ Admin duyệt mở khóa
     (
         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3',
         '22222222-2222-2222-2222-222222222223',
@@ -102,7 +112,7 @@ UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2' WHERE id IN 
 UPDATE users SET tenant_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3' WHERE id IN ('22222222-2222-2222-2222-222222222223', '33333333-3333-3333-3333-333333333335', '33333333-3333-3333-3333-333333333336');
 
 -- =========================================================
--- 3. DỮ LIỆU GÓI CƯỚC & DOANH THU PHẦN MỀM CHO SUPER ADMIN
+-- 3. DỮ LIỆU GÓI CƯỚC & DOANH THU PHẦN MỀM CHO ADMIN
 -- =========================================================
 INSERT INTO subscription_plans (id, name, price_per_month, max_courts, description, commission_rate, badge, is_featured)
 VALUES
@@ -113,8 +123,8 @@ VALUES
 
 INSERT INTO tenant_subscriptions (tenant_id, plan_id, amount_paid, start_date, end_date, payment_status)
 VALUES
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 9000000, CURRENT_DATE - INTERVAL '1 month', CURRENT_DATE + INTERVAL '5 months', 'PAID'),
-    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 4800000, CURRENT_DATE - INTERVAL '15 days', CURRENT_DATE + INTERVAL '5 months', 'PAID');
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2', 199000, CURRENT_DATE - INTERVAL '1 month', CURRENT_DATE + INTERVAL '5 months', 'PAID'),
+    ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1', 99000, CURRENT_DATE - INTERVAL '15 days', CURRENT_DATE + INTERVAL '5 months', 'PAID');
 
 -- =========================================================
 -- 4. TẠO SÂN BÃI (CÓ SÂN ĐÃ PUBLISHED & SÂN ĐANG PENDING)
@@ -212,15 +222,15 @@ VALUES
         240000, 0, 240000, FALSE, 'PENDING_REFUND',
         'Techcombank', '1903888999000', 'HOANG QUOC BAO'
     ),
-    -- Đơn 4: Vé vãng lai (WALK_IN) trong ngày hôm nay do Lễ tân tạo
+    -- Đơn 4: Vé sự kiện (EVENT) trong ngày hôm nay do Lễ tân tạo
     (
         'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeee4',
-        'WL200004',
+        'EV200004',
         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1',
         'cccccccc-cccc-cccc-cccc-ccccccccccc1',
-        'WALK_IN',
+        'EVENT',
         NULL,
-        'Nhóm vãng lai Anh Khoa (Ghép 6 người)', '0912345678',
+        'Giải Cầu Lông Giao Lưu Anh Khoa', '0912345678',
         '33333333-3333-3333-3333-333333333331',
         CURRENT_DATE,
         CURRENT_DATE + TIME '17:30:00',
@@ -332,3 +342,16 @@ VALUES
         5,
         'CLB có bãi để xe ô tô rộng rãi, sinh viên được giảm thẳng 30k/ca chơi nên giá rất mềm. Chắc chắn sẽ rủ bạn bè quay lại!'
     );
+
+-- =========================================================
+-- 10. TẠO CA TRỰC MẪU (TENANT SHIFTS) CHO CÁC CỤM SÂN
+-- =========================================================
+INSERT INTO tenant_shifts (id, tenant_id, name, start_time, end_time, is_active)
+VALUES
+    (uuid_generate_v4(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Ca Sáng', '05:00', '14:00', TRUE),
+    (uuid_generate_v4(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1', 'Ca Tối', '14:00', '23:00', TRUE),
+    (uuid_generate_v4(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Ca Sáng', '05:00', '14:00', TRUE),
+    (uuid_generate_v4(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa2', 'Ca Tối', '14:00', '23:00', TRUE),
+    (uuid_generate_v4(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Ca Sáng', '05:00', '14:00', TRUE),
+    (uuid_generate_v4(), 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa3', 'Ca Tối', '14:00', '23:00', TRUE);
+

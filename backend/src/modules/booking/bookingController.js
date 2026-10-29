@@ -1,6 +1,7 @@
 const db = require('../../config/db');
 const { validateTimeBlocks, calculateBookingPrice } = require('./pricingHelper');
 const { notifyBookingUpdate } = require('../../config/socket');
+const { isValidVNPhone, formatVNPhone } = require('../../utils/validators');
 
 // 1. LẤY DỮ LIỆU LƯỚI THỜI GIAN (TIMELINE GRID) CỦA CỤM SÂN THEO NGÀY
 exports.getDailyTimeline = async (req, res) => {
@@ -31,13 +32,16 @@ exports.getDailyTimeline = async (req, res) => {
 
     // Lấy tất cả các ca đặt đang giữ chỗ (dưới 15 phút) hoặc đã xác nhận trong ngày đó
     const bookingsRes = await db.query(
-      `SELECT id, booking_code, court_id, booking_type, start_time, end_time, status,
-              walk_in_guest_name, walk_in_guest_phone, user_id, checked_in_at, is_checked_in, final_price
-       FROM bookings
-       WHERE tenant_id = $1
-         AND booking_date = $2
-         AND (status IN ('CONFIRMED', 'COMPLETED') OR (status = 'PENDING' AND created_at >= NOW() - INTERVAL '15 minutes'))
-       ORDER BY start_time ASC`,
+      `SELECT b.id, b.booking_code, b.court_id, b.booking_type, b.start_time, b.end_time, b.status,
+              b.walk_in_guest_name, b.walk_in_guest_phone, b.user_id, b.checked_in_at, b.is_checked_in, b.final_price,
+              COALESCE(b.walk_in_guest_name, u.full_name) AS customer_name,
+              COALESCE(b.walk_in_guest_phone, u.phone) AS customer_phone
+       FROM bookings b
+       LEFT JOIN users u ON b.user_id = u.id
+       WHERE b.tenant_id = $1
+         AND b.booking_date = $2
+         AND (b.status IN ('CONFIRMED', 'COMPLETED') OR (b.status = 'PENDING' AND b.created_at >= NOW() - INTERVAL '15 minutes'))
+       ORDER BY b.start_time ASC`,
       [tenantId, date]
     );
 
@@ -55,7 +59,8 @@ exports.getDailyTimeline = async (req, res) => {
 
 // 2. TÍNH THỬ GIÁ TIỀN TỰ ĐỘNG TRƯỚC KHI ĐẶT (DÀNH CHO GIAO DIỆN KHÁCH HÀNG)
 exports.previewBookingPrice = async (req, res) => {
-  const { tenantId, courtId, startTime, endTime } = req.body;
+  const { tenantId, startTime, endTime } = req.body;
+  const courtId = req.body.courtId || (Array.isArray(req.body.courtIds) ? req.body.courtIds[0] : undefined);
 
   const checkBlock = validateTimeBlocks(startTime, endTime);
   if (!checkBlock.valid) {
@@ -235,6 +240,7 @@ exports.createVisualBooking = async (req, res) => {
   }
 };
 
+// 4. LỄ TÂN / CHỦ SÂN TẠO VÉ SỰ KIỆN / GIẢI ĐẤU (EVENT) - ĐẶT ĐƯỢC NHIỀU SÂN, GIẢM 20% KHI > 3 SÂN
 exports.createStaffBooking = async (req, res) => {
   const tenantId = req.tenant.id;
   const staffId = req.user.id;
@@ -244,23 +250,33 @@ exports.createStaffBooking = async (req, res) => {
     bookingType,
     guestName,
     guestPhone,
-    bookingDate,
+    bookingDate: rawBookingDate,
     startTime,
     endTime,
     customPrice
   } = req.body;
+  const bookingDate = rawBookingDate || (startTime ? startTime.split('T')[0] : null);
 
-  if (!['WALK_IN', 'EVENT'].includes(bookingType)) {
-    return res.status(400).json({ message: 'Loại vé phải là WALK_IN (Vãng lai) hoặc EVENT (Sự kiện).' });
+  if (guestPhone && guestPhone.trim()) {
+    if (!isValidVNPhone(guestPhone)) {
+      return res.status(400).json({
+        message: 'Số điện thoại khách không hợp lệ. Vui lòng nhập đúng 10 chữ số di động VN (đầu 03, 05, 07, 08, 09).'
+      });
+    }
+  }
+  const cleanGuestPhone = guestPhone && guestPhone.trim() ? formatVNPhone(guestPhone) : '';
+
+  if (bookingType === 'WALK_IN') {
+    return res.status(400).json({ message: 'Loại vé vãng lai đã ngừng hỗ trợ. Vui lòng chọn vé Sự Kiện (EVENT)!' });
   }
 
-  // Cho phép nhiều sân khi chọn EVENT
-  const targetCourtIds = (bookingType === 'EVENT' && Array.isArray(courtIds) && courtIds.length > 0)
+  // Cho phép 1 hoặc nhiều sân khi tổ chức Sự Kiện
+  const targetCourtIds = (Array.isArray(courtIds) && courtIds.length > 0)
     ? courtIds
     : [courtId].filter(Boolean);
 
   if (targetCourtIds.length === 0) {
-    return res.status(400).json({ message: 'Vui lòng chọn ít nhất 1 sân.' });
+    return res.status(400).json({ message: 'Vui lòng chọn ít nhất 1 sân để tổ chức sự kiện.' });
   }
 
   const checkBlock = validateTimeBlocks(startTime, endTime);
@@ -274,13 +290,10 @@ exports.createStaffBooking = async (req, res) => {
     await client.query('BEGIN');
 
     const rulesRes = await client.query(`SELECT * FROM pricing_rules WHERE tenant_id = $1`, [tenantId]);
-    const createdBookings = [];
+    const tenantRes = await client.query(`SELECT * FROM tenants WHERE id = $1`, [tenantId]);
 
-    const parsedCustomPrice = customPrice !== undefined && customPrice !== '' ? Number(customPrice) : null;
-    const pricePerCourt = parsedCustomPrice !== null && !isNaN(parsedCustomPrice)
-      ? Math.round(parsedCustomPrice / targetCourtIds.length)
-      : null;
-
+    // 1. Kiểm tra tồn tại, bảo trì và trùng lịch trước cho tất cả các sân
+    const courtsToBook = [];
     for (const cId of targetCourtIds) {
       const courtRes = await client.query(
         `SELECT * FROM courts WHERE id = $1 AND tenant_id = $2 FOR UPDATE`,
@@ -291,6 +304,14 @@ exports.createStaffBooking = async (req, res) => {
         return res.status(404).json({ message: `Không tìm thấy sân có ID: ${cId}` });
       }
       const court = courtRes.rows[0];
+
+      if (court.is_under_maintenance) {
+        const maintStart = court.maintenance_start ? new Date(court.maintenance_start) : null;
+        if (!maintStart || new Date(checkBlock.end) > maintStart) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ message: `Sân "${court.name}" đang trong thời gian bảo trì, vui lòng chọn sân khác.` });
+        }
+      }
 
       const overlapRes = await client.query(
         `SELECT id FROM bookings
@@ -307,43 +328,77 @@ exports.createStaffBooking = async (req, res) => {
         return res.status(409).json({ message: `Sân "${court.name}" đã bị trùng lịch trong khung giờ này!` });
       }
 
-      let courtFinalAmount = pricePerCourt;
-      if (courtFinalAmount === null) {
-        const calc = calculateBookingPrice({
-          start: checkBlock.start,
-          end: checkBlock.end,
-          courtType: court.type,
-          pricingRules: rulesRes.rows,
-          tenant: req.tenant,
-          isVerifiedStudent: false
-        });
-        courtFinalAmount = calc.finalPrice;
+      courtsToBook.push(court);
+    }
+
+    // 2. Tính tiền theo bảng giá động (KHÔNG áp dụng ưu đãi sinh viên)
+    let totalOriginalPrice = 0;
+    const courtPrices = [];
+
+    for (const court of courtsToBook) {
+      const calc = calculateBookingPrice({
+        start: checkBlock.start,
+        end: checkBlock.end,
+        courtType: court.type,
+        pricingRules: rulesRes.rows,
+        tenant: tenantRes.rows[0],
+        isVerifiedStudent: false // Không áp dụng ưu đãi sinh viên cho vé sự kiện
+      });
+      totalOriginalPrice += calc.originalPrice;
+      courtPrices.push({
+        court,
+        originalPrice: calc.originalPrice
+      });
+    }
+
+    // Quy định: Đặt trên 3 sân (> 3 sân, tức từ 4 sân trở lên) được giảm 20% tổng số tiền
+    const isBulkDiscount = targetCourtIds.length > 3;
+    const discountRate = isBulkDiscount ? 0.20 : 0;
+    const totalDiscount = Math.round(totalOriginalPrice * discountRate);
+
+    const parsedCustomPrice = customPrice !== undefined && customPrice !== '' ? Number(customPrice) : null;
+    const hasCustomPrice = parsedCustomPrice !== null && !isNaN(parsedCustomPrice) && parsedCustomPrice >= 0;
+
+    const createdBookings = [];
+    const eventGroupCode = 'EV' + Math.floor(100000 + Math.random() * 900000);
+
+    for (let i = 0; i < courtPrices.length; i++) {
+      const { court, originalPrice } = courtPrices[i];
+      let courtFinal = 0;
+      let courtDiscount = 0;
+
+      if (hasCustomPrice) {
+        courtFinal = Math.round(parsedCustomPrice / courtPrices.length);
+        courtDiscount = Math.max(0, originalPrice - courtFinal);
+      } else {
+        courtDiscount = Math.round(originalPrice * discountRate);
+        courtFinal = originalPrice - courtDiscount;
       }
 
-      const prefix = bookingType === 'EVENT' ? 'EV' : 'WL';
-      const bookingCode = prefix + Math.floor(100000 + Math.random() * 900000);
+      const bookingCode = courtsToBook.length === 1 ? eventGroupCode : `${eventGroupCode}-${i + 1}`;
 
       const insertRes = await client.query(
         `INSERT INTO bookings (
           booking_code, tenant_id, court_id, booking_type,
           walk_in_guest_name, walk_in_guest_phone, created_by_staff_id,
           booking_date, start_time, end_time,
-          original_price, discount_applied, final_price, status
+          original_price, discount_applied, final_price, is_student_applied, status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, $11, 'CONFIRMED')
+        VALUES ($1, $2, $3, 'EVENT', $4, $5, $6, $7, $8, $9, $10, $11, $12, FALSE, 'CONFIRMED')
         RETURNING *`,
         [
           bookingCode,
           tenantId,
-          cId,
-          bookingType,
-          guestName || (bookingType === 'EVENT' ? 'Sự Kiện / Giải Đấu' : 'Khách vãng lai'),
-          guestPhone || '',
+          court.id,
+          guestName || 'Sự Kiện / Giải Đấu',
+          cleanGuestPhone,
           staffId,
           bookingDate,
           checkBlock.start,
           checkBlock.end,
-          courtFinalAmount
+          originalPrice,
+          courtDiscount,
+          courtFinal
         ]
       );
 
@@ -359,16 +414,23 @@ exports.createStaffBooking = async (req, res) => {
       date: bookingDate,
     });
 
+    const finalTotalAmount = hasCustomPrice ? parsedCustomPrice : (totalOriginalPrice - totalDiscount);
+
     res.status(201).json({
       success: true,
-      message: `Đã tạo lịch ${bookingType === 'EVENT' ? `Sự kiện (${createdBookings.length} sân)` : 'Vãng lai'} thành công!`,
+      message: `Đã tạo vé Sự Kiện (${createdBookings.length} sân) thành công!${isBulkDiscount ? ' (Đã áp dụng giảm 20% khi đặt trên 3 sân)' : ''}`,
       bookings: createdBookings,
-      booking: createdBookings[0]
+      booking: createdBookings[0],
+      totalOriginalPrice,
+      totalDiscount,
+      totalFinalPrice: finalTotalAmount,
+      isBulkDiscount,
+      discountPercent: isBulkDiscount ? 20 : 0
     });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Lỗi khi tạo lịch trực tiếp tại sân:', error);
-    res.status(500).json({ message: 'Lỗi khi tạo lịch trực tiếp tại sân.' });
+    console.error('Lỗi khi tạo vé sự kiện:', error);
+    res.status(500).json({ message: 'Lỗi khi tạo vé sự kiện.' });
   } finally {
     client.release();
   }
@@ -399,7 +461,7 @@ exports.getMyBookings = async (req, res) => {
 // 6. LỄ TÂN CHECK-IN KHÁCH ĐẾN SÂN & HOÀN TẤT CA CHƠI (MỞ KHÓA REVIEW)
 exports.updateBookingOperationStatus = async (req, res) => {
   const { id } = req.params;
-  const { action } = req.body; // 'CHECK_IN' hoặc 'COMPLETE'
+  const action = req.body.action || req.body.operation; // 'CHECK_IN' hoặc 'COMPLETE'
   const tenantId = req.tenant.id;
 
   try {
@@ -542,7 +604,7 @@ exports.cancelPendingBooking = async (req, res) => {
 // 8. LỄ TÂN QUÉT HOẶC NHẬP MÃ QR ĐỂ CHECK-IN NHANH 1 GIÂY
 exports.quickCheckIn = async (req, res) => {
   const tenantId = req.tenant.id;
-  let { code } = req.body; // e.g. "CHECKIN:DS123456" hoặc "DS123456"
+  let code = req.body.code || req.body.codeOrQr; // e.g. "CHECKIN:DS123456" hoặc "DS123456"
   if (!code) {
     return res.status(400).json({ message: 'Vui lòng cung cấp mã vé hoặc quét mã QR.' });
   }
@@ -629,3 +691,173 @@ exports.quickCheckIn = async (req, res) => {
     res.status(500).json({ message: 'Lỗi máy chủ khi thực hiện check-in nhanh.' });
   }
 };
+// 10. LỄ TÂN / CHỦ SÂN KIỂM TRA & XEM TRƯỚC GIÁ GIA HẠN CA CHƠI
+exports.previewExtendBooking = async (req, res) => {
+  const { bookingId, durationMinutes } = req.body;
+  const tenantId = req.tenant.id;
+
+  if (!bookingId || !durationMinutes || ![30, 60].includes(Number(durationMinutes))) {
+    return res.status(400).json({ message: 'Thời gian gia hạn phải là 30 phút hoặc 60 phút.' });
+  }
+
+  try {
+    const bookingRes = await db.query(
+      `SELECT b.*, c.type as court_type, c.name as court_name
+       FROM bookings b
+       JOIN courts c ON b.court_id = c.id
+       WHERE b.id = $1 AND b.tenant_id = $2`,
+      [bookingId, tenantId]
+    );
+
+    if (bookingRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy ca đặt.' });
+    }
+
+    const booking = bookingRes.rows[0];
+    const currentEnd = new Date(booking.end_time);
+    const newEnd = new Date(currentEnd.getTime() + Number(durationMinutes) * 60 * 1000);
+
+    // Kiểm tra trùng lịch với ca khác trên cùng sân
+    const conflictRes = await db.query(
+      `SELECT id, booking_code, start_time, end_time
+       FROM bookings
+       WHERE court_id = $1
+         AND id != $2
+         AND status IN ('CONFIRMED', 'COMPLETED', 'PENDING')
+         AND start_time < $3 AND end_time > $4`,
+      [booking.court_id, booking.id, newEnd, currentEnd]
+    );
+
+    if (conflictRes.rows.length > 0) {
+      const conflict = conflictRes.rows[0];
+      const conflictStart = new Date(conflict.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      const conflictEnd = new Date(conflict.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+      return res.status(400).json({
+        canExtend: false,
+        message: `Không thể gia hạn! Khung giờ tiếp theo [${conflictStart} - ${conflictEnd}] trên sân này đã có ca đặt trước (${conflict.booking_code}).`
+      });
+    }
+
+    // Lấy bảng giá động của cụm sân
+    const rulesRes = await db.query(
+      'SELECT * FROM pricing_rules WHERE tenant_id = $1',
+      [tenantId]
+    );
+
+    const priceCalc = calculateBookingPrice({
+      start: currentEnd,
+      end: newEnd,
+      courtType: booking.court_type,
+      pricingRules: rulesRes.rows,
+      tenant: req.tenant,
+      isVerifiedStudent: Boolean(booking.is_student_applied)
+    });
+
+    res.json({
+      success: true,
+      canExtend: true,
+      currentEndTime: booking.end_time,
+      newEndTime: newEnd.toISOString(),
+      durationMinutes: Number(durationMinutes),
+      extraPrice: priceCalc.finalPrice,
+      originalExtraPrice: priceCalc.originalPrice,
+      courtName: booking.court_name
+    });
+  } catch (err) {
+    console.error('Error previewing extension:', err);
+    res.status(500).json({ message: 'Lỗi khi tính toán gia hạn ca chơi.' });
+  }
+};
+
+// 11. LỄ TÂN / CHỦ SÂN GIA HẠN GIỜ CHƠI 1 CHẠM
+exports.extendBooking = async (req, res) => {
+  const { bookingId, durationMinutes, paymentMethod = 'CASH' } = req.body;
+  const tenantId = req.tenant.id;
+
+  if (!bookingId || !durationMinutes || ![30, 60].includes(Number(durationMinutes))) {
+    return res.status(400).json({ message: 'Thời gian gia hạn phải là 30 phút hoặc 60 phút.' });
+  }
+
+  try {
+    const bookingRes = await db.query(
+      `SELECT b.*, c.type as court_type, c.name as court_name
+       FROM bookings b
+       JOIN courts c ON b.court_id = c.id
+       WHERE b.id = $1 AND b.tenant_id = $2`,
+      [bookingId, tenantId]
+    );
+
+    if (bookingRes.rows.length === 0) {
+      return res.status(404).json({ message: 'Không tìm thấy ca đặt.' });
+    }
+
+    const booking = bookingRes.rows[0];
+    const currentEnd = new Date(booking.end_time);
+    const newEnd = new Date(currentEnd.getTime() + Number(durationMinutes) * 60 * 1000);
+
+    // Kiểm tra trùng lịch với ca khác trên cùng sân
+    const conflictRes = await db.query(
+      `SELECT id, booking_code, start_time, end_time
+       FROM bookings
+       WHERE court_id = $1
+         AND id != $2
+         AND status IN ('CONFIRMED', 'COMPLETED', 'PENDING')
+         AND start_time < $3 AND end_time > $4`,
+      [booking.court_id, booking.id, newEnd, currentEnd]
+    );
+
+    if (conflictRes.rows.length > 0) {
+      return res.status(400).json({
+        message: 'Khung giờ tiếp theo đã có người đặt, không thể gia hạn thêm!'
+      });
+    }
+
+    // Lấy bảng giá
+    const rulesRes = await db.query(
+      'SELECT * FROM pricing_rules WHERE tenant_id = $1',
+      [tenantId]
+    );
+
+    const priceCalc = calculateBookingPrice({
+      start: currentEnd,
+      end: newEnd,
+      courtType: booking.court_type,
+      pricingRules: rulesRes.rows,
+      tenant: req.tenant,
+      isVerifiedStudent: Boolean(booking.is_student_applied)
+    });
+
+    const updatedBookingRes = await db.query(
+      `UPDATE bookings
+       SET end_time = $1,
+           original_price = original_price + $2,
+           discount_applied = discount_applied + $3,
+           final_price = final_price + $4,
+           updated_at = NOW()
+       WHERE id = $5
+       RETURNING *`,
+      [newEnd, priceCalc.originalPrice, priceCalc.discountApplied, priceCalc.finalPrice, booking.id]
+    );
+
+    const updatedBooking = updatedBookingRes.rows[0];
+
+    // Phát thông báo thời gian thực qua Socket.io
+    notifyBookingUpdate(tenantId, {
+      type: 'BOOKING_EXTENDED',
+      booking: updatedBooking,
+      date: updatedBooking.booking_date,
+      courtId: updatedBooking.court_id
+    });
+
+    res.json({
+      success: true,
+      message: `✓ Đã gia hạn thêm ${durationMinutes} phút thành công! Phụ thu: ${Number(priceCalc.finalPrice).toLocaleString()} ₫ (${paymentMethod === 'CASH' ? 'Tiền mặt' : 'Chuyển khoản'}).`,
+      booking: updatedBooking,
+      extraPrice: priceCalc.finalPrice,
+      paymentMethod
+    });
+  } catch (err) {
+    console.error('Error extending booking:', err);
+    res.status(500).json({ message: 'Lỗi máy chủ khi gia hạn ca chơi.' });
+  }
+};

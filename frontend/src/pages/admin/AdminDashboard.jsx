@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
 import { useAuth } from '../../context/AuthContext';
-import SaasRevenueCharts from '../../components/superAdmin/SaasRevenueCharts';
+import SaasRevenueCharts from '../../components/admin/SaasRevenueCharts';
 import ExpandableAddButton from '../../components/common/ExpandableAddButton';
-import { exportSuperAdminRevenueToExcel, exportSuperAdminRevenueToCSV } from '../../utils/excelExport';
+import NotificationBell from '../../components/common/NotificationBell';
+import { exportAdminRevenueToExcel, exportAdminRevenueToCSV } from '../../utils/excelExport';
 
-export default function SuperAdminDashboard() {
+export default function AdminDashboard() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -18,11 +19,11 @@ export default function SuperAdminDashboard() {
 
   const handleExportSaasExcel = async () => {
     setIsExportingSaas(true);
-    const toastId = toast.loading('Đang trích xuất toàn bộ sổ cái hợp đồng SaaS...');
+    const toastId = toast.loading('Đang trích xuất toàn bộ sổ cái hợp đồng phần mềm...');
     try {
-      const res = await axiosClient.get('/super-admin/revenue-export');
+      const res = await axiosClient.get('/admin/revenue-export');
       if (res.data?.success && res.data?.exportData) {
-        await exportSuperAdminRevenueToExcel(res.data.exportData);
+        await exportAdminRevenueToExcel(res.data.exportData);
         toast.success('Đã xuất file Excel SaaS (.xlsx) thành công!', { id: toastId });
       } else {
         toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });
@@ -39,9 +40,9 @@ export default function SuperAdminDashboard() {
     setIsExportingSaas(true);
     const toastId = toast.loading('Đang chuẩn bị file CSV...');
     try {
-      const res = await axiosClient.get('/super-admin/revenue-export');
+      const res = await axiosClient.get('/admin/revenue-export');
       if (res.data?.success && res.data?.exportData) {
-        exportSuperAdminRevenueToCSV(res.data.exportData);
+        exportAdminRevenueToCSV(res.data.exportData);
         toast.success('Đã xuất file CSV thành công!', { id: toastId });
       } else {
         toast.error('Không tìm thấy dữ liệu để xuất.', { id: toastId });
@@ -81,7 +82,6 @@ export default function SuperAdminDashboard() {
     confirmText: 'Xác nhận',
     cancelText: 'Hủy bỏ',
     confirmColor: 'emerald', // 'emerald' | 'red' | 'amber'
-    icon: '⚠️',
     onConfirm: null,
   });
 
@@ -91,7 +91,6 @@ export default function SuperAdminDashboard() {
     confirmText = 'Xác nhận',
     cancelText = 'Hủy bỏ',
     confirmColor = 'emerald',
-    icon = '⚠️',
     onConfirm,
   }) => {
     setConfirmModal({
@@ -101,7 +100,6 @@ export default function SuperAdminDashboard() {
       confirmText,
       cancelText,
       confirmColor,
-      icon,
       onConfirm: async () => {
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
         if (onConfirm) await onConfirm();
@@ -155,10 +153,10 @@ export default function SuperAdminDashboard() {
   const fetchAllData = async () => {
     try {
       const [appRes, dashRes, plansRes, tenantsRes] = await Promise.all([
-        axiosClient.get('/super-admin/pending-approvals'),
-        axiosClient.get('/super-admin/dashboard'),
-        axiosClient.get('/super-admin/plans'),
-        axiosClient.get('/super-admin/all-tenants'),
+        axiosClient.get('/admin/pending-approvals'),
+        axiosClient.get('/admin/dashboard'),
+        axiosClient.get('/admin/plans'),
+        axiosClient.get('/admin/all-tenants'),
       ]);
       setApprovals(appRes.data.data);
       setDashboard(dashRes.data.data);
@@ -182,12 +180,11 @@ export default function SuperAdminDashboard() {
       message: isApprove
         ? `Xác nhận phê duyệt và kích hoạt tài khoản cụm sân "${tenantName}"? Cụm sân sẽ chính thức được phép hoạt động trên hệ thống.`
         : `Bạn có chắc muốn từ chối hồ sơ đăng ký cụm sân "${tenantName}"?`,
-      confirmText: isApprove ? '✓ Duyệt mở khóa' : '✕ Từ chối',
+      confirmText: isApprove ? 'Duyệt mở khóa' : 'Từ chối',
       confirmColor: isApprove ? 'emerald' : 'red',
-      icon: isApprove ? '🏟️' : '⚠️',
       onConfirm: async () => {
         try {
-          const res = await axiosClient.put(`/super-admin/tenants/${id}/status`, { status });
+          const res = await axiosClient.put(`/admin/tenants/${id}/status`, { status });
           toast.success(res.data.message);
           fetchAllData();
         } catch (err) {
@@ -204,12 +201,11 @@ export default function SuperAdminDashboard() {
       message: isApprove
         ? `Xác nhận phê duyệt sân "${courtName}" lên sàn? Khách hàng có thể nhìn thấy và đặt lịch trực tuyến.`
         : `Bạn có chắc muốn từ chối đưa sân "${courtName}" lên sàn?`,
-      confirmText: isApprove ? '✓ Duyệt lên sàn' : '✕ Từ chối',
+      confirmText: isApprove ? 'Duyệt lên sàn' : 'Từ chối',
       confirmColor: isApprove ? 'emerald' : 'red',
-      icon: isApprove ? '🏸' : '⚠️',
       onConfirm: async () => {
         try {
-          const res = await axiosClient.put(`/super-admin/courts/${id}/status`, { status });
+          const res = await axiosClient.put(`/admin/courts/${id}/status`, { status });
           toast.success(res.data.message);
           fetchAllData();
         } catch (err) {
@@ -226,12 +222,11 @@ export default function SuperAdminDashboard() {
       message: isApprove
         ? `Xác nhận thông tin thẻ học sinh/sinh viên của "${studentName}" hợp lệ? Tài khoản sẽ được hưởng chính sách giảm giá ưu đãi khi đặt sân.`
         : `Bạn có chắc muốn từ chối yêu cầu xác thực thẻ của "${studentName}"?`,
-      confirmText: isApprove ? '🎓 Xác thực ngay' : '✕ Từ chối',
+      confirmText: isApprove ? 'Xác thực ngay' : 'Từ chối',
       confirmColor: isApprove ? 'emerald' : 'red',
-      icon: isApprove ? '🎓' : '⚠️',
       onConfirm: async () => {
         try {
-          const res = await axiosClient.put(`/super-admin/students/${userId}/verify`, { status });
+          const res = await axiosClient.put(`/admin/students/${userId}/verify`, { status });
           toast.success(res.data.message);
           fetchAllData();
         } catch (err) {
@@ -246,12 +241,11 @@ export default function SuperAdminDashboard() {
     askConfirm({
       title: 'Phê Duyệt Gói Cước SaaS',
       message: `Xác nhận phê duyệt và kích hoạt gói "${sub.plan_name}" cho cụm sân "${sub.tenant_name}"? Số tiền đã thanh toán: ${Number(sub.amount_paid).toLocaleString()} ₫ (Mã GD: ${sub.transaction_code || 'N/A'}).`,
-      confirmText: '✓ Duyệt & Kích hoạt',
+      confirmText: 'Duyệt & Kích hoạt',
       confirmColor: 'emerald',
-      icon: '⚡',
       onConfirm: async () => {
         try {
-          const res = await axiosClient.put(`/super-admin/subscriptions/${sub.id}/approve`);
+          const res = await axiosClient.put(`/admin/subscriptions/${sub.id}/approve`);
           toast.success(res.data.message);
           fetchAllData();
         } catch (err) {
@@ -272,7 +266,7 @@ export default function SuperAdminDashboard() {
   const handleConfirmRejectSub = async () => {
     if (!rejectSubModal.sub) return;
     try {
-      const res = await axiosClient.put(`/super-admin/subscriptions/${rejectSubModal.sub.id}/reject`, {
+      const res = await axiosClient.put(`/admin/subscriptions/${rejectSubModal.sub.id}/reject`, {
         rejectionReason: rejectSubModal.reason,
       });
       toast.success(res.data.message);
@@ -332,11 +326,11 @@ export default function SuperAdminDashboard() {
     e.preventDefault();
     try {
       if (editingPlan) {
-        await axiosClient.put(`/super-admin/plans/${editingPlan.id}`, planForm);
-        toast.success('Đã cập nhật gói cước SaaS thành công!');
+        await axiosClient.put(`/admin/plans/${editingPlan.id}`, planForm);
+        toast.success('Đã cập nhật gói cước phần mềm thành công!');
       } else {
-        await axiosClient.post('/super-admin/plans', planForm);
-        toast.success('Đã tạo gói cước SaaS mới thành công!');
+        await axiosClient.post('/admin/plans', planForm);
+        toast.success('Đã tạo gói cước phần mềm mới thành công!');
       }
       setShowPlanModal(false);
       fetchAllData();
@@ -351,10 +345,9 @@ export default function SuperAdminDashboard() {
       message: `Bạn có chắc muốn xóa hoặc tạm ẩn gói cước "${plan.name}"? Các chủ sân đang sử dụng sẽ không bị ảnh hưởng.`,
       confirmText: 'Xác nhận xóa/ẩn',
       confirmColor: 'red',
-      icon: '🗑️',
       onConfirm: async () => {
         try {
-          const res = await axiosClient.delete(`/super-admin/plans/${plan.id}`);
+          const res = await axiosClient.delete(`/admin/plans/${plan.id}`);
           toast.success(res.data.message);
           fetchAllData();
         } catch (err) {
@@ -397,12 +390,12 @@ export default function SuperAdminDashboard() {
   const handleRecordSubscription = async (e) => {
     e.preventDefault();
     try {
-      const res = await axiosClient.post('/super-admin/subscriptions/record', subForm);
+      const res = await axiosClient.post('/admin/subscriptions/record', subForm);
       toast.success(res.data.message);
       setShowSubModal(false);
       fetchAllData();
     } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi khi kích hoạt hợp đồng SaaS.');
+      toast.error(err.response?.data?.message || 'Lỗi khi kích hoạt hợp đồng phần mềm.');
     }
   };
 
@@ -410,27 +403,27 @@ export default function SuperAdminDashboard() {
   const TAB_ITEMS = [
     {
       id: 'SUBSCRIPTIONS',
-      label: `⚡ Duyệt Gói Cước (${approvals.pendingSubscriptions?.length || 0})`,
+      label: `Duyệt Gói Cước (${approvals.pendingSubscriptions?.length || 0})`,
       badge: approvals.pendingSubscriptions?.length || 0,
     },
     {
       id: 'TENANTS',
-      label: `🏟️ Duyệt Chủ Sân (${approvals.pendingTenants.length})`,
+      label: `Duyệt Chủ Sân (${approvals.pendingTenants.length})`,
       badge: approvals.pendingTenants.length,
     },
     {
       id: 'COURTS',
-      label: `🏸 Duyệt Sân Mới (${approvals.pendingCourts.length})`,
+      label: `Duyệt Sân Mới (${approvals.pendingCourts.length})`,
       badge: approvals.pendingCourts.length,
     },
     {
       id: 'STUDENTS',
-      label: `🎓 Duyệt Thẻ HSSV (${approvals.pendingStudents.length})`,
+      label: `Duyệt Thẻ HSSV (${approvals.pendingStudents.length})`,
       badge: approvals.pendingStudents.length,
     },
-    { id: 'PRICING', label: `🏷️ Cấu Hình Giá & Gói SaaS (${plans.length})` },
-    { id: 'REVENUE', label: '📊 Doanh Thu & Biểu Đồ' },
-    { id: 'ALL_TENANTS', label: `🏢 Quản Lý Cụm Sân (${allTenants.length})` },
+    { id: 'PRICING', label: `Cấu Hình Giá & Gói Dịch Vụ (${plans.length})` },
+    { id: 'REVENUE', label: 'Doanh Thu & Biểu Đồ' },
+    { id: 'ALL_TENANTS', label: `Quản Lý Cụm Sân (${allTenants.length})` },
   ];
 
   return (
@@ -455,13 +448,13 @@ export default function SuperAdminDashboard() {
                 </span>
                 <span className="text-xs text-slate-400 hidden sm:inline">Badminton SaaS Ecosystem</span>
               </div>
-              <h1 className="text-xl font-black tracking-tight mt-0.5">Super Admin Portal</h1>
+              <h1 className="text-xl font-black tracking-tight mt-0.5">Admin Portal</h1>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <span className="text-xs bg-white/10 px-3.5 py-2 rounded-xl font-bold text-slate-200 hidden sm:inline-block">
-              👑 {user?.fullName || 'Quản Trị Viên Nền Tảng'}
+              {user?.fullName || 'Quản Trị Viên'}
             </span>
             <button
               onClick={() => {
@@ -513,7 +506,7 @@ export default function SuperAdminDashboard() {
                   Trung Tâm Quản Trị Hệ Thống SaaS
                 </span>
                 <h2 className="text-2xl sm:text-3xl font-black mt-3">
-                  Chào mừng trở lại, {user?.fullName || 'Super Admin'}!
+                  Chào mừng trở lại, {user?.fullName || 'Admin'}!
                 </h2>
                 <p className="text-xs sm:text-sm text-slate-300 mt-1.5 leading-relaxed">
                   Lựa chọn một danh mục quản trị dưới đây để kiểm duyệt hồ sơ mở sân mới, cấu hình bảng giá thuê nền tảng cho các chủ sân hoặc theo dõi biểu đồ tăng trưởng doanh thu.
@@ -522,13 +515,13 @@ export default function SuperAdminDashboard() {
                 {/* THỐNG KÊ NHANH TRÊN HERO BANNER */}
                 <div className="flex flex-wrap gap-3 mt-5 text-xs font-bold">
                   <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 flex items-center gap-2">
-                    <span className="text-emerald-400">💰 Tổng Doanh Thu SaaS:</span>
+                    <span className="text-emerald-400">Tổng Doanh Thu SaaS:</span>
                     <span className="text-white font-black text-sm">
                       {Number(dashboard.saasRevenue?.total_saas_revenue || 0).toLocaleString()} ₫
                     </span>
                   </div>
                   <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 flex items-center gap-2">
-                    <span className="text-amber-400">⏳ Đang Chờ Duyệt:</span>
+                    <span className="text-amber-400">Đang Chờ Duyệt:</span>
                     <span className="text-white font-black text-sm">
                       {(approvals.pendingSubscriptions?.length || 0) +
                         approvals.pendingTenants.length +
@@ -538,16 +531,12 @@ export default function SuperAdminDashboard() {
                     </span>
                   </div>
                   <div className="bg-white/10 backdrop-blur-md px-3.5 py-2 rounded-xl border border-white/10 flex items-center gap-2">
-                    <span className="text-cyan-400">🏟️ Cụm Sân Hoạt Động:</span>
+                    <span className="text-cyan-400">Cụm Sân Hoạt Động:</span>
                     <span className="text-white font-black text-sm">
                       {allTenants.filter((t) => t.status === 'ACTIVE').length} / {allTenants.length}
                     </span>
                   </div>
                 </div>
-              </div>
-
-              <div className="absolute right-4 bottom-2 opacity-10 text-9xl select-none pointer-events-none">
-                🏸
               </div>
             </div>
 
@@ -559,8 +548,10 @@ export default function SuperAdminDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl shadow-sm">
-                    ⚡
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
                   </div>
                   <span
                     className={`text-[11px] font-black px-3 py-1 rounded-full ${
@@ -591,8 +582,10 @@ export default function SuperAdminDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-emerald-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center text-2xl shadow-sm">
-                    🏟️
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 border border-emerald-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-emerald-50 text-emerald-800 border border-emerald-200/70 px-3 py-1 rounded-full">
                     {approvals.pendingTenants.length} Hồ sơ chờ
@@ -618,8 +611,10 @@ export default function SuperAdminDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-teal-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center text-2xl shadow-sm">
-                    🏸
+                  <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-700 border border-teal-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16m-7 6h7M4 18h2" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-teal-50 text-teal-800 border border-teal-200/70 px-3 py-1 rounded-full">
                     {approvals.pendingCourts.length} Sân chờ
@@ -645,8 +640,10 @@ export default function SuperAdminDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-amber-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-100 flex items-center justify-center text-2xl shadow-sm">
-                    🎓
+                  <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 border border-amber-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-200/70 px-3 py-1 rounded-full">
                     {approvals.pendingStudents.length} Yêu cầu
@@ -672,8 +669,10 @@ export default function SuperAdminDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-purple-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 border border-purple-100 flex items-center justify-center text-2xl shadow-sm">
-                    🏷️
+                  <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-700 border border-purple-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-purple-50 text-purple-800 border border-purple-200/70 px-3 py-1 rounded-full">
                     {plans.length} Gói cước
@@ -681,7 +680,7 @@ export default function SuperAdminDashboard() {
                 </div>
                 <div>
                   <h3 className="text-lg font-black text-slate-900 group-hover:text-purple-700 transition-colors tracking-tight">
-                    Cấu Hình Giá & Gói SaaS
+                    Cấu Hình Giá & Gói Dịch Vụ
                   </h3>
                   <p className="text-xs text-slate-500 mt-1.5 line-clamp-2 leading-relaxed font-medium">
                     Mô hình giá thực tế ALOBO (99k – 299k/tháng, 14 ngày dùng thử, hoa hồng app 0% – 5%)
@@ -699,8 +698,10 @@ export default function SuperAdminDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-indigo-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center text-2xl shadow-sm">
-                    📊
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 border border-indigo-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-indigo-50 text-indigo-800 border border-indigo-200/70 px-3 py-1 rounded-full">
                     Trực quan
@@ -726,8 +727,10 @@ export default function SuperAdminDashboard() {
                 className="group cursor-pointer rounded-3xl p-6 bg-white border border-slate-200/90 hover:border-blue-500 hover:shadow-lg hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between h-52 relative overflow-hidden shadow-sm"
               >
                 <div className="flex justify-between items-start">
-                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center text-2xl shadow-sm">
-                    🏢
+                  <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 border border-blue-100 flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z" />
+                    </svg>
                   </div>
                   <span className="text-[11px] font-black bg-slate-100 text-slate-700 border border-slate-200/70 px-2.5 py-1 rounded-full">
                     {allTenants.length} Cụm sân
@@ -761,14 +764,14 @@ export default function SuperAdminDashboard() {
                   Duyệt Yêu Cầu Đăng Ký & Gia Hạn Gói Cước SaaS
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Chủ sân tự chọn gói cước và thanh toán VietQR. Super Admin phê duyệt để kích hoạt hoặc từ chối để hoàn tiền 100% về tài khoản của chủ sân.
+                  Chủ sân tự chọn gói cước và thanh toán VietQR. Admin phê duyệt để kích hoạt hoặc từ chối để hoàn tiền 100% về tài khoản của chủ sân.
                 </p>
               </div>
 
               <div className="w-full sm:w-72">
                 <input
                   type="text"
-                  placeholder="Tìm theo tên sân, chủ sân, mã GD..."
+                  placeholder="Tìm kiếm giao dịch..."
                   value={searchSub}
                   onChange={(e) => setSearchSub(e.target.value)}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-indigo-500"
@@ -785,7 +788,6 @@ export default function SuperAdminDashboard() {
 
               {(!approvals.pendingSubscriptions || approvals.pendingSubscriptions.length === 0) ? (
                 <div className="py-12 text-center text-slate-400 text-xs">
-                  <div className="text-4xl mb-2">🎉</div>
                   Hiện không có yêu cầu gói cước nào đang chờ duyệt.
                 </div>
               ) : (
@@ -813,11 +815,11 @@ export default function SuperAdminDashboard() {
                               Quận {s.district}
                             </span>
                             <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold animate-pulse">
-                              ⏳ Chờ phê duyệt thanh toán
+                              Chờ phê duyệt thanh toán
                             </span>
                             {s.tenant_status === 'PENDING' && (
                               <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-[10px] font-bold">
-                                🏟️ Cụm sân mới
+                                Cụm sân mới
                               </span>
                             )}
                           </div>
@@ -862,9 +864,8 @@ export default function SuperAdminDashboard() {
                             </div>
 
                             <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/80 space-y-1.5 shadow-xs">
-                              <div className="text-[10px] font-black uppercase text-amber-800 tracking-wider flex items-center gap-1">
-                                <span>🛡️</span>
-                                <span>Tài Khoản Hoàn Tiền (Nếu từ chối)</span>
+                              <div className="text-[10px] font-black uppercase text-amber-800 tracking-wider">
+                                Tài Khoản Hoàn Tiền (Nếu từ chối)
                               </div>
                               <div className="text-xs text-slate-700">
                                 Ngân hàng: <strong className="text-slate-900">{s.refund_bank_name || 'Chưa cung cấp'}</strong>
@@ -889,18 +890,16 @@ export default function SuperAdminDashboard() {
                           <button
                             type="button"
                             onClick={() => handleApproveSubscription(s)}
-                            className="flex-1 lg:flex-initial bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center gap-1.5"
+                            className="flex-1 lg:flex-initial bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center justify-center"
                           >
-                            <span>✓</span>
-                            <span>Phê duyệt kích hoạt</span>
+                            Phê duyệt kích hoạt
                           </button>
                           <button
                             type="button"
                             onClick={() => handleOpenRejectSub(s)}
-                            className="flex-1 lg:flex-initial bg-red-600 hover:bg-red-700 active:scale-95 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5"
+                            className="flex-1 lg:flex-initial bg-red-600 hover:bg-red-700 active:scale-95 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition flex items-center justify-center"
                           >
-                            <span>✕</span>
-                            <span>Từ chối & Hoàn tiền</span>
+                            Từ chối & Hoàn tiền
                           </button>
                         </div>
                       </div>
@@ -927,7 +926,7 @@ export default function SuperAdminDashboard() {
               <div className="w-full sm:w-72">
                 <input
                   type="text"
-                  placeholder="Tìm theo tên sân, quận hoặc email..."
+                  placeholder="Tìm kiếm cụm sân..."
                   value={searchTenant}
                   onChange={(e) => setSearchTenant(e.target.value)}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500"
@@ -944,7 +943,6 @@ export default function SuperAdminDashboard() {
 
               {approvals.pendingTenants.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-xs">
-                  <div className="text-4xl mb-2">🎉</div>
                   Hiện không có hồ sơ chủ sân nào đang chờ duyệt.
                 </div>
               ) : (
@@ -979,7 +977,7 @@ export default function SuperAdminDashboard() {
                             <strong className="text-slate-900">{t.phone_contact}</strong>
                           </div>
                           <div className="text-slate-500 flex flex-wrap items-center gap-2">
-                            <span>📍 {t.address}</span>
+                            <span>{t.address}</span>
                             <span>•</span>
                             <span>
                               UUID:{' '}
@@ -996,21 +994,21 @@ export default function SuperAdminDashboard() {
                             onClick={() => openAssignModal(t.id)}
                             className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 px-3.5 py-2 rounded-xl text-xs font-bold transition"
                           >
-                            🏷️ Gán gói cước SaaS
+                            Gán gói cước phần mềm
                           </button>
                           <button
                             type="button"
                             onClick={() => handleTenantStatus(t.id, 'ACTIVE', t.name)}
                             className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm"
                           >
-                            ✓ Duyệt mở khóa (ACTIVE)
+                            Duyệt kích hoạt cụm sân
                           </button>
                           <button
                             type="button"
                             onClick={() => handleTenantStatus(t.id, 'REJECTED', t.name)}
                             className="bg-red-600 hover:bg-red-700 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition"
                           >
-                            ✕ Từ chối
+                            Từ chối
                           </button>
                         </div>
                       </div>
@@ -1037,7 +1035,7 @@ export default function SuperAdminDashboard() {
               <div className="w-full sm:w-72">
                 <input
                   type="text"
-                  placeholder="Tìm theo tên sân, cụm sân..."
+                  placeholder="Tìm kiếm sân..."
                   value={searchCourt}
                   onChange={(e) => setSearchCourt(e.target.value)}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500"
@@ -1054,7 +1052,6 @@ export default function SuperAdminDashboard() {
 
               {approvals.pendingCourts.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-xs">
-                  <div className="text-4xl mb-2">🏸</div>
                   Không có sân con nào đang chờ duyệt lên sàn.
                 </div>
               ) : (
@@ -1084,7 +1081,7 @@ export default function SuperAdminDashboard() {
                                   : 'bg-blue-100 text-blue-900 border-blue-200'
                               }`}
                             >
-                              Loại: {c.type}
+                              Loại: {c.type === 'VIP' ? 'Sân VIP' : 'Tiêu chuẩn'}
                             </span>
                             <span className="bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
                               Chờ duyệt
@@ -1104,14 +1101,14 @@ export default function SuperAdminDashboard() {
                             onClick={() => handleCourtStatus(c.id, 'PUBLISHED', c.name)}
                             className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm"
                           >
-                            ✓ Duyệt lên sàn (PUBLISHED)
+                            Duyệt mở bán trên sàn
                           </button>
                           <button
                             type="button"
                             onClick={() => handleCourtStatus(c.id, 'REJECTED', c.name)}
                             className="bg-red-600 hover:bg-red-700 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition"
                           >
-                            ✕ Từ chối
+                            Từ chối
                           </button>
                         </div>
                       </div>
@@ -1138,7 +1135,7 @@ export default function SuperAdminDashboard() {
               <div className="w-full sm:w-72">
                 <input
                   type="text"
-                  placeholder="Tìm theo họ tên, email, SĐT..."
+                  placeholder="Tìm kiếm học sinh, sinh viên..."
                   value={searchStudent}
                   onChange={(e) => setSearchStudent(e.target.value)}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500"
@@ -1155,7 +1152,6 @@ export default function SuperAdminDashboard() {
 
               {approvals.pendingStudents.length === 0 ? (
                 <div className="py-12 text-center text-slate-400 text-xs">
-                  <div className="text-4xl mb-2">🎓</div>
                   Không có yêu cầu xác thực thẻ Sinh viên nào đang chờ xử lý.
                 </div>
               ) : (
@@ -1190,10 +1186,9 @@ export default function SuperAdminDashboard() {
                             <button
                               type="button"
                               onClick={() => setStudentCardPreview(st)}
-                              className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg font-bold text-xs hover:bg-emerald-100 transition flex items-center gap-1.5"
+                              className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-lg font-bold text-xs hover:bg-emerald-100 transition"
                             >
-                              <span>🖼️</span>
-                              <span>Mở xem ảnh thẻ sinh viên</span>
+                              Mở xem ảnh thẻ sinh viên
                             </button>
                           </div>
                         </div>
@@ -1204,14 +1199,14 @@ export default function SuperAdminDashboard() {
                             onClick={() => handleStudentVerify(st.id, 'VERIFIED', st.full_name)}
                             className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm"
                           >
-                            🎓 Xác thực Sinh viên (VERIFIED)
+                            Xác thực sinh viên hợp lệ
                           </button>
                           <button
                             type="button"
                             onClick={() => handleStudentVerify(st.id, 'REJECTED', st.full_name)}
                             className="bg-red-600 hover:bg-red-700 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition"
                           >
-                            ✕ Từ chối
+                            Từ chối
                           </button>
                         </div>
                       </div>
@@ -1243,7 +1238,6 @@ export default function SuperAdminDashboard() {
                   onClick={() => openAssignModal()}
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5"
                 >
-                  <span>⚡</span>
                   <span>Ghi nhận / Gia hạn gói</span>
                 </button>
                 <ExpandableAddButton
@@ -1293,7 +1287,7 @@ export default function SuperAdminDashboard() {
                     <span>3. Khách quen / Khách tại quầy</span>
                   </div>
                   <p className="text-slate-300 leading-relaxed text-[11px]">
-                    • <strong>0% phí giao dịch:</strong> Hoàn toàn không phát sinh phí đối với khách vãng lai, khách gọi điện đặt trực tiếp.<br />
+                    • <strong>0% phí giao dịch:</strong> Hoàn toàn không phát sinh phí đối với khách đặt trực tiếp tại quầy, vé sự kiện.<br />
                     • Quản lý trực tiếp trên phần mềm và POS không giới hạn.
                   </p>
                 </div>
@@ -1320,7 +1314,7 @@ export default function SuperAdminDashboard() {
                   >
                     {p.is_featured && (
                       <div className="absolute top-0 right-0 bg-emerald-600 text-white text-[10px] font-black px-3.5 py-1 rounded-bl-xl uppercase tracking-wider">
-                        ★ Được chọn nhiều nhất
+                        Được chọn nhiều nhất
                       </div>
                     )}
 
@@ -1328,7 +1322,7 @@ export default function SuperAdminDashboard() {
                       {/* Huy hiệu gói */}
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-extrabold uppercase px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700">
-                          {p.badge || 'Gói SaaS'}
+                          {p.badge || 'Gói Dịch Vụ'}
                         </span>
                         {!p.is_active && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
@@ -1387,7 +1381,7 @@ export default function SuperAdminDashboard() {
                         <ul className="space-y-1.5 text-xs text-slate-600">
                           {planFeatures.map((f, idx) => (
                             <li key={idx} className="flex items-start gap-2">
-                              <span className="text-emerald-600 font-bold">✓</span>
+                              <span className="text-emerald-600 font-bold">•</span>
                               <span className="leading-snug">{f}</span>
                             </li>
                           ))}
@@ -1402,7 +1396,7 @@ export default function SuperAdminDashboard() {
                         onClick={() => openEditPlanModal(p)}
                         className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 py-2 rounded-xl text-xs font-bold transition"
                       >
-                        ✏️ Sửa gói
+                        Sửa gói
                       </button>
                       <button
                         type="button"
@@ -1410,7 +1404,7 @@ export default function SuperAdminDashboard() {
                         className="bg-red-50 hover:bg-red-100 text-red-600 px-3 py-2 rounded-xl text-xs font-bold transition"
                         title="Xóa hoặc Tạm ẩn gói"
                       >
-                        🗑️
+                        Xóa
                       </button>
                     </div>
                   </div>
@@ -1443,7 +1437,6 @@ export default function SuperAdminDashboard() {
                   className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white px-3.5 py-2.5 rounded-xl text-xs font-bold transition shadow-sm flex items-center gap-1.5 disabled:opacity-50"
                   title="Xuất sổ cái hợp đồng & tài chính SaaS ra file Excel (.xlsx)"
                 >
-                  <span className="text-sm">📗</span>
                   <span>{isExportingSaas ? 'Đang trích xuất...' : 'Xuất Báo Cáo Excel'}</span>
                 </button>
 
@@ -1472,14 +1465,14 @@ export default function SuperAdminDashboard() {
               <div>
                 <h2 className="text-xl font-black text-slate-900">Danh Sách Cụm Sân Toàn Mạng Lưới</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Tra cứu tình trạng vận hành, gói cước SaaS và hạn sử dụng của từng cụm sân
+                  Tra cứu tình trạng vận hành, gói cước phần mềm và hạn sử dụng của từng cụm sân
                 </p>
               </div>
 
               <div className="w-full sm:w-72">
                 <input
                   type="text"
-                  placeholder="Tìm theo tên cụm sân, quận..."
+                  placeholder="Tìm kiếm cụm sân..."
                   value={searchTenant}
                   onChange={(e) => setSearchTenant(e.target.value)}
                   className="w-full px-3.5 py-2 bg-white border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-emerald-500"
@@ -1495,7 +1488,7 @@ export default function SuperAdminDashboard() {
                       <th className="pb-3">Cụm sân</th>
                       <th className="pb-3">Chủ sở hữu & Liên hệ</th>
                       <th className="pb-3">Số lượng sân</th>
-                      <th className="pb-3">Gói SaaS hiện tại</th>
+                      <th className="pb-3">Gói Dịch Vụ hiện tại</th>
                       <th className="pb-3">Trạng thái</th>
                       <th className="pb-3 text-right">Thao tác</th>
                     </tr>
@@ -1661,7 +1654,7 @@ export default function SuperAdminDashboard() {
                 }}
                 className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition"
               >
-                ✕ Từ chối thẻ
+                Từ chối thẻ
               </button>
               <button
                 type="button"
@@ -1671,7 +1664,7 @@ export default function SuperAdminDashboard() {
                 }}
                 className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition shadow-sm"
               >
-                🎓 Duyệt Xác Thực Thẻ
+                Duyệt Xác Thực Thẻ
               </button>
             </div>
           </div>
@@ -1703,7 +1696,7 @@ export default function SuperAdminDashboard() {
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Gói Tiêu Chuẩn (Standard SaaS)..."
+                  placeholder="Tên gói cước"
                   value={planForm.name}
                   onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl"
@@ -1740,7 +1733,7 @@ export default function SuperAdminDashboard() {
                   <label className="block font-bold text-slate-700 mb-1">Huy hiệu hiển thị</label>
                   <input
                     type="text"
-                    placeholder="Ví dụ: Khuyên dùng, Tiết kiệm..."
+                    placeholder="Huy hiệu (VD: Phổ biến, Tiết kiệm)"
                     value={planForm.badge}
                     onChange={(e) => setPlanForm({ ...planForm, badge: e.target.value })}
                     className="w-full px-3.5 py-2.5 border border-slate-200 rounded-xl"
@@ -1764,7 +1757,7 @@ export default function SuperAdminDashboard() {
                 <label className="block font-bold text-slate-700 mb-1">Mô tả ngắn về gói</label>
                 <textarea
                   rows={2}
-                  placeholder="Mô tả đối tượng phù hợp, lợi ích chính..."
+                  placeholder="Mô tả ngắn về gói cước..."
                   value={planForm.description}
                   onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })}
                   className="w-full px-3.5 py-2 border border-slate-200 rounded-xl"
@@ -1779,7 +1772,7 @@ export default function SuperAdminDashboard() {
                 <div className="flex gap-2 mb-2">
                   <input
                     type="text"
-                    placeholder="Nhập tính năng mới rồi bấm Thêm..."
+                    placeholder="Nhập tính năng mới..."
                     value={planForm.featureInput}
                     onChange={(e) => setPlanForm({ ...planForm, featureInput: e.target.value })}
                     onKeyDown={(e) => {
@@ -1805,7 +1798,7 @@ export default function SuperAdminDashboard() {
                       key={idx}
                       className="bg-white border border-slate-200 text-slate-800 px-2.5 py-1 rounded-lg flex items-center gap-1.5 font-medium"
                     >
-                      <span>✓ {feat}</span>
+                      <span>• {feat}</span>
                       <button
                         type="button"
                         onClick={() => removeFeatureFromPlan(idx)}
@@ -1891,7 +1884,7 @@ export default function SuperAdminDashboard() {
                 <div className="mt-1">
                   <input
                     type="text"
-                    placeholder="Hoặc điền trực tiếp Tenant UUID..."
+                    placeholder="Nhập mã cụm sân (UUID)..."
                     value={subForm.tenantId}
                     onChange={(e) => setSubForm({ ...subForm, tenantId: e.target.value })}
                     className="w-full px-3 py-1.5 border border-slate-200 rounded-xl text-[11px] font-mono mt-1 text-slate-600"
@@ -1900,7 +1893,7 @@ export default function SuperAdminDashboard() {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Gói cước SaaS áp dụng</label>
+                <label className="block font-bold text-slate-700 mb-1">Gói cước phần mềm áp dụng</label>
                 <select
                   value={subForm.planId}
                   onChange={(e) => {
@@ -2004,7 +1997,7 @@ export default function SuperAdminDashboard() {
                   type="submit"
                   className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl font-bold transition shadow-sm"
                 >
-                  ✓ Xác Nhận & Kích Hoạt SaaS
+                  Xác Nhận & Kích Hoạt SaaS
                 </button>
               </div>
             </form>
@@ -2019,8 +2012,10 @@ export default function SuperAdminDashboard() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-scale-up">
           <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center text-2xl font-bold">
-                💸
+              <div className="w-12 h-12 rounded-2xl bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">Từ Chối & Hoàn Tiền Gói Cước</h3>
@@ -2057,7 +2052,7 @@ export default function SuperAdminDashboard() {
                 rows={3}
                 value={rejectSubModal.reason}
                 onChange={(e) => setRejectSubModal({ ...rejectSubModal, reason: e.target.value })}
-                placeholder="Nhập lý do từ chối hoặc hướng dẫn..."
+                placeholder="Lý do từ chối..."
                 className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-red-500"
               />
             </div>
@@ -2075,7 +2070,7 @@ export default function SuperAdminDashboard() {
                 onClick={handleConfirmRejectSub}
                 className="px-5 py-2.5 rounded-xl text-xs font-bold text-white bg-red-600 hover:bg-red-700 transition shadow-md active:scale-95"
               >
-                ✕ Xác nhận Từ chối & Đã hoàn tiền
+                Xác nhận Từ chối & Đã hoàn tiền
               </button>
             </div>
           </div>
@@ -2089,7 +2084,23 @@ export default function SuperAdminDashboard() {
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 animate-scale-up space-y-4">
             <div className="flex items-start gap-3">
-              <span className="text-3xl select-none">{confirmModal.icon}</span>
+              <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
+                confirmModal.confirmColor === 'red'
+                  ? 'bg-red-100 text-red-600'
+                  : confirmModal.confirmColor === 'amber'
+                  ? 'bg-amber-100 text-amber-600'
+                  : 'bg-emerald-100 text-emerald-600'
+              }`}>
+                {confirmModal.confirmColor === 'red' ? (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                )}
+              </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">{confirmModal.title}</h3>
                 <p className="text-xs text-slate-600 mt-1 leading-relaxed">

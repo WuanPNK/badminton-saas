@@ -1,3 +1,5 @@
+import { isValidVNPhone, sanitizePhoneInput } from '../../utils/validators';
+
 export default function AccountSettings({
   user,
   accountSection,
@@ -52,7 +54,7 @@ export default function AccountSettings({
                     : 'hover:bg-slate-50 text-slate-700'
                 }`}
               >
-                <span>👤 Thông tin cá nhân & Thẻ HSSV</span>
+                <span>Thông tin cá nhân & Thẻ HSSV</span>
                 <span>›</span>
               </button>
 
@@ -67,7 +69,7 @@ export default function AccountSettings({
                     : 'hover:bg-slate-50 text-slate-700'
                 }`}
               >
-                <span>🔒 Đổi mật khẩu tài khoản</span>
+                <span>Đổi mật khẩu tài khoản</span>
                 <span>›</span>
               </button>
             </div>
@@ -85,7 +87,7 @@ export default function AccountSettings({
                   : 'hover:bg-slate-50 text-slate-700'
               }`}
             >
-              <span>📅 Danh sách lịch đã đặt</span>
+              <span>Danh sách lịch đã đặt</span>
               <span>›</span>
             </button>
           </div>
@@ -103,17 +105,17 @@ export default function AccountSettings({
                     : 'hover:bg-slate-50 text-slate-700'
                 }`}
               >
-                <span>🛡️ Điều khoản và chính sách</span>
+                <span>Điều khoản và chính sách</span>
                 <span>›</span>
               </button>
 
               <div className="flex justify-between items-center px-3.5 py-2.5 text-slate-500">
-                <span>ℹ️ Thông tin phiên bản</span>
+                <span>Thông tin phiên bản</span>
                 <span className="font-mono font-semibold text-slate-700">v2.1.0 SaaS</span>
               </div>
 
               <div className="flex justify-between items-center px-3.5 py-2.5 text-slate-500">
-                <span>🌐 Ngôn ngữ</span>
+                <span>Ngôn ngữ</span>
                 <span className="font-semibold text-slate-700">Tiếng Việt</span>
               </div>
             </div>
@@ -133,13 +135,12 @@ export default function AccountSettings({
       <div className="lg:col-span-8 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200/80">
         {accountMsg.text && (
           <div
-            className={`p-3.5 rounded-2xl text-xs mb-5 font-bold flex items-center gap-2 ${
+            className={`p-3.5 rounded-2xl text-xs mb-5 font-bold flex items-center ${
               accountMsg.type === 'error'
                 ? 'bg-red-50 text-red-700 border border-red-200'
                 : 'bg-emerald-50 text-emerald-800 border border-emerald-200'
             }`}
           >
-            <span>{accountMsg.type === 'error' ? '⚠️' : '✅'}</span>
             <span>{accountMsg.text}</span>
           </div>
         )}
@@ -171,18 +172,37 @@ export default function AccountSettings({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Số điện thoại
-                </label>
+                <div className="flex justify-between items-center mb-1">
+                  <label className="block text-xs font-bold text-slate-700">
+                    Số điện thoại
+                  </label>
+                  {profileForm.phone?.trim() && (
+                    <span className={`text-[10px] font-bold ${isValidVNPhone(profileForm.phone) ? 'text-emerald-600' : 'text-red-500'}`}>
+                      {isValidVNPhone(profileForm.phone) ? 'Hợp lệ (10 số)' : `${profileForm.phone.length}/10 số`}
+                    </span>
+                  )}
+                </div>
                 <input
-                  type="text"
+                  type="tel"
                   required
+                  maxLength={10}
                   value={profileForm.phone}
                   onChange={(e) =>
-                    setProfileForm({ ...profileForm, phone: e.target.value })
+                    setProfileForm({ ...profileForm, phone: sanitizePhoneInput(e.target.value) })
                   }
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                  className={`w-full px-3.5 py-2.5 bg-slate-50 border rounded-xl text-sm transition focus:bg-white focus:outline-none focus:ring-2 ${
+                    profileForm.phone?.trim()
+                      ? isValidVNPhone(profileForm.phone)
+                        ? 'border-emerald-500 focus:ring-emerald-500/20'
+                        : 'border-red-400 focus:ring-red-400/20'
+                      : 'border-slate-200 focus:ring-emerald-500'
+                  }`}
                 />
+                {profileForm.phone?.trim() && !isValidVNPhone(profileForm.phone) && (
+                  <p className="text-[11px] text-red-500 mt-1 leading-tight">
+                    SĐT di động VN gồm 10 số (đầu 03, 05, 07, 08, 09).
+                  </p>
+                )}
               </div>
             </div>
 
@@ -201,7 +221,7 @@ export default function AccountSettings({
             <div className="bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200 space-y-3">
               <div className="flex justify-between items-center">
                 <span className="text-xs font-extrabold text-emerald-950">
-                  🎓 Trạng thái Ưu đãi Học sinh / Sinh viên
+                  Trạng thái Ưu đãi Học sinh / Sinh viên
                 </span>
                 {renderStudentBadge()}
               </div>
@@ -209,7 +229,7 @@ export default function AccountSettings({
               {user?.studentStatus !== 'VERIFIED' && (
                 <div className="space-y-2">
                   <p className="text-xs text-emerald-800">
-                    Tải lên ảnh chụp Thẻ Học sinh / Sinh viên để Super Admin phê duyệt giảm giá tự động khi đặt sân:
+                    Tải lên ảnh chụp Thẻ Học sinh / Sinh viên để Admin phê duyệt giảm giá tự động khi đặt sân:
                   </p>
                   <label className="flex flex-col items-center justify-center w-full p-4 bg-white border-2 border-dashed border-emerald-300 rounded-xl cursor-pointer hover:bg-emerald-50/40 transition">
                     {profileForm.studentCardImage ? (
@@ -220,12 +240,14 @@ export default function AccountSettings({
                           className="max-h-32 mx-auto rounded-lg border"
                         />
                         <p className="text-xs font-bold text-emerald-700">
-                          ✓ {profileForm.studentCardFileName}
+                          {profileForm.studentCardFileName}
                         </p>
                       </div>
                     ) : (
-                      <div className="text-center py-1">
-                        <span className="text-xl">📷</span>
+                      <div className="text-center py-2">
+                        <svg className="w-7 h-7 mx-auto text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
                         <p className="text-xs font-bold text-emerald-800 mt-1">
                           Bấm để chọn ảnh Thẻ Sinh viên từ máy
                         </p>
@@ -245,9 +267,8 @@ export default function AccountSettings({
             {/* THÔNG TIN TÀI KHOẢN NGÂN HÀNG HOÀN TIỀN */}
             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-3">
               <div>
-                <h3 className="text-xs font-extrabold text-slate-800 flex items-center gap-1.5">
-                  <span>🏦</span>
-                  <span>Tài khoản Ngân hàng nhận tiền hoàn (Khi hủy lịch trước 24h)</span>
+                <h3 className="text-xs font-extrabold text-slate-800">
+                  Tài khoản Ngân hàng nhận tiền hoàn (Khi hủy lịch trước 24h)
                 </h3>
                 <p className="text-[11px] text-slate-500 mt-0.5">
                   Thông tin này sẽ được tự động điền khi bạn yêu cầu hủy sân để nhận hoàn 100% tiền sân nhanh chóng.
@@ -259,7 +280,7 @@ export default function AccountSettings({
                   <label className="block text-xs font-bold text-slate-700 mb-1">Tên Ngân hàng</label>
                   <input
                     type="text"
-                    placeholder="VD: MB Bank, Techcombank..."
+                    placeholder="Tên ngân hàng"
                     value={profileForm.bankName || ''}
                     onChange={(e) =>
                       setProfileForm({ ...profileForm, bankName: e.target.value })
@@ -271,24 +292,24 @@ export default function AccountSettings({
                   <label className="block text-xs font-bold text-slate-700 mb-1">Số tài khoản (STK)</label>
                   <input
                     type="text"
-                    placeholder="VD: 19034889928282"
+                    placeholder="Số tài khoản"
                     value={profileForm.bankAccountNumber || ''}
                     onChange={(e) =>
                       setProfileForm({ ...profileForm, bankAccountNumber: e.target.value })
                     }
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-mono font-bold"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium"
                   />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Tên chủ tài khoản</label>
                   <input
                     type="text"
-                    placeholder="VD: NGUYEN VAN A"
+                    placeholder="Tên chủ tài khoản"
                     value={profileForm.bankAccountName || ''}
                     onChange={(e) =>
                       setProfileForm({ ...profileForm, bankAccountName: e.target.value })
                     }
-                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs uppercase font-bold"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-medium"
                   />
                 </div>
               </div>
@@ -299,7 +320,7 @@ export default function AccountSettings({
               disabled={savingAccount}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl text-xs transition shadow-sm"
             >
-              {savingAccount ? 'Đang lưu...' : '💾 Lưu thay đổi hồ sơ'}
+              {savingAccount ? 'Đang lưu...' : 'Lưu thay đổi hồ sơ'}
             </button>
           </form>
         )}
@@ -324,7 +345,7 @@ export default function AccountSettings({
                 onChange={(e) =>
                   setPasswordForm({ ...passwordForm, currentPassword: e.target.value })
                 }
-                placeholder="Nhập mật khẩu đang sử dụng"
+                placeholder="Mật khẩu hiện tại"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
               />
             </div>
@@ -340,7 +361,7 @@ export default function AccountSettings({
                 onChange={(e) =>
                   setPasswordForm({ ...passwordForm, newPassword: e.target.value })
                 }
-                placeholder="Nhập mật khẩu mới"
+                placeholder="Mật khẩu mới (tối thiểu 6 ký tự)"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
               />
             </div>
@@ -356,7 +377,7 @@ export default function AccountSettings({
                 onChange={(e) =>
                   setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })
                 }
-                placeholder="Xác nhận lại mật khẩu mới"
+                placeholder="Nhập lại mật khẩu mới"
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm"
               />
             </div>
@@ -364,7 +385,7 @@ export default function AccountSettings({
             {passwordForm.confirmPassword &&
               passwordForm.newPassword !== passwordForm.confirmPassword && (
                 <p className="text-xs text-red-600 font-semibold">
-                  ⚠️ Mật khẩu nhập lại không khớp!
+                  Mật khẩu nhập lại không khớp!
                 </p>
               )}
 
@@ -373,7 +394,7 @@ export default function AccountSettings({
               disabled={savingAccount}
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-3 rounded-xl text-xs transition shadow-sm"
             >
-              {savingAccount ? 'Đang cập nhật...' : '🔒 Cập nhật mật khẩu mới'}
+              {savingAccount ? 'Đang cập nhật...' : 'Cập nhật mật khẩu mới'}
             </button>
           </form>
         )}
@@ -409,7 +430,7 @@ export default function AccountSettings({
                         {new Date(b.start_time).toLocaleDateString('vi-VN')} {new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} • Mã: #{b.booking_code}
                       </div>
                       <div className="font-bold text-emerald-700 mt-1">
-                        {Number(b.final_price).toLocaleString()} ₫ ({b.status})
+                        {Number(b.final_price).toLocaleString()} ₫ ({b.status === 'CONFIRMED' ? 'Đã xác nhận' : b.status === 'COMPLETED' ? 'Đã hoàn thành' : b.status === 'PENDING_REFUND' ? 'Chờ hoàn tiền' : b.status === 'REFUNDED' ? 'Đã hoàn tiền' : b.status === 'CANCELLED' ? 'Đã hủy' : b.status === 'PENDING' ? 'Chờ thanh toán' : b.status})
                       </div>
                     </div>
 
@@ -427,7 +448,7 @@ export default function AccountSettings({
                           onClick={() => setReviewModalBooking(b)}
                           className="bg-amber-500 text-slate-950 px-3 py-1.5 rounded-xl font-bold"
                         >
-                          ★ Đánh giá
+                          Đánh giá
                         </button>
                       )}
                     </div>
@@ -439,19 +460,21 @@ export default function AccountSettings({
         )}
 
         {accountSection === 'TERMS' && (
-          <div className="space-y-3 text-xs text-slate-600 leading-relaxed">
-            <h2 className="text-lg font-extrabold text-slate-900 mb-2">
-              Điều khoản và Chính sách Đặt lịch
+          <div className="space-y-4 text-xs text-slate-600 leading-relaxed">
+            <h2 className="text-lg font-extrabold text-slate-900 mb-3">
+              Điều khoản và Chính sách Đặt sân
             </h2>
-            <p>
-              <strong>1. Quy định đặt lịch theo block 30 phút:</strong> Mọi lượt đặt sân trực quan đều được tính theo bội số 30 phút (tối thiểu 60 phút/ca) và tự động tính giá động theo khung giờ của từng cụm sân.
-            </p>
-            <p>
-              <strong>2. Chính sách hoàn tiền 100%:</strong> Khách hàng hủy lịch đặt trước giờ bắt đầu chơi tối thiểu <strong>24 giờ</strong> sẽ được hoàn lại 100% số tiền đã thanh toán vào tài khoản ngân hàng cung cấp.
-            </p>
-            <p>
-              <strong>3. Chính sách Học sinh / Sinh viên:</strong> Tài khoản có thẻ HSSV ở trạng thái <code>VERIFIED</code> được hệ thống tự động khấu trừ ưu đãi trên mọi khung giờ theo cấu hình của chủ sân.
-            </p>
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+              <p>
+                <strong className="text-slate-800">1. Thời gian và khung giờ thuê sân:</strong> Quý khách có thể linh hoạt chọn giờ chơi theo từng mốc 30 phút (thời lượng tối thiểu mỗi lượt là 1 tiếng). Giá thuê sân sẽ tự động được áp dụng chuẩn xác theo từng khung giờ ngày thường hoặc giờ cao điểm của cụm sân.
+              </p>
+              <p>
+                <strong className="text-slate-800">2. Chính sách hủy lịch và hoàn tiền:</strong> Nếu có thay đổi lịch trình, quý khách được hoàn lại 100% số tiền đã thanh toán khi thao tác hủy sân trước giờ chơi ít nhất <strong>24 tiếng</strong>. Số tiền hoàn sẽ được chuyển trực tiếp về tài khoản ngân hàng của quý khách.
+              </p>
+              <p>
+                <strong className="text-slate-800">3. Ưu đãi dành cho Học sinh - Sinh viên:</strong> Sau khi gửi ảnh thẻ học sinh / sinh viên và được ban quản trị xác nhận thành công, tài khoản của bạn sẽ tự động được giảm giá trực tiếp vào hóa đơn đặt sân theo chính sách ưu đãi của từng chủ sân.
+              </p>
+            </div>
           </div>
         )}
       </div>

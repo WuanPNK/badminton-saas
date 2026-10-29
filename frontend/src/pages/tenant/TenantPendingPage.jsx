@@ -76,7 +76,7 @@ export default function TenantPendingPage() {
         if (data.status === 'ACTIVE') {
           setStatus('ACTIVE');
           updateUser({ tenantStatus: 'ACTIVE' });
-          toast.success('🎉 Chúc mừng! Cụm sân của bạn đã được Super Admin phê duyệt!', {
+          toast.success('Chúc mừng! Cụm sân của bạn đã được Admin phê duyệt!', {
             duration: 5000,
           });
           setTimeout(() => navigate('/tenant'), 1500);
@@ -104,9 +104,7 @@ export default function TenantPendingPage() {
         }
 
         if (!silent) {
-          toast('Hồ sơ vẫn đang chờ Super Admin phê duyệt. Vui lòng kiên nhẫn!', {
-            icon: '⏳',
-          });
+          toast('Hồ sơ vẫn đang chờ Admin phê duyệt. Vui lòng kiên nhẫn!');
         }
       } catch (err) {
         if (err.response?.status === 403) {
@@ -185,11 +183,11 @@ export default function TenantPendingPage() {
       {/* HEADER: THƯƠNG HIỆU & NÚT ĐĂNG XUẤT */}
       <header className="max-w-4xl w-full mx-auto flex items-center justify-between pb-6 border-b border-white/10 relative z-10">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-xl shadow-lg shadow-emerald-500/20">
-            🏸
+          <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center font-black text-white text-base shadow-lg shadow-emerald-500/20">
+            BH
           </div>
           <div>
-            <h1 className="font-extrabold text-base tracking-wide text-white">BADMINTON SAAS</h1>
+            <h1 className="font-extrabold text-base tracking-wide text-white">BADMINTONHUB</h1>
             <p className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">
               Cổng Quản Trị Đối Tác Quản Lý Sân
             </p>
@@ -204,10 +202,9 @@ export default function TenantPendingPage() {
           <button
             type="button"
             onClick={handleLogout}
-            className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-bold text-slate-200 hover:text-white transition active:scale-95 flex items-center gap-1.5"
+            className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-bold text-slate-200 hover:text-white transition active:scale-95"
           >
-            <span>🚪</span>
-            <span>Đăng xuất</span>
+            Đăng xuất
           </button>
         </div>
       </header>
@@ -224,7 +221,7 @@ export default function TenantPendingPage() {
             </div>
 
             <span className="text-xs text-slate-400 font-mono">
-              Mã hồ sơ: #{tenantInfo?.id ? tenantInfo.id.slice(0, 8).toUpperCase() : 'PENDING'}
+              Mã hồ sơ: #{tenantInfo?.id ? tenantInfo.id.slice(0, 8).toUpperCase() : 'Chờ cấp'}
             </span>
           </div>
 
@@ -234,7 +231,7 @@ export default function TenantPendingPage() {
               Cụm sân <span className="text-emerald-400">{tenantInfo?.name || 'Của bạn'}</span> đang chờ duyệt
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed">
-              Hồ sơ đăng ký đối tác quản lý sân của bạn đã được gửi thành công. Super Admin đang xem xét và xác minh thông tin địa điểm trước khi kích hoạt bảng điều khiển quản lý sân chính thức.
+              Hồ sơ đăng ký đối tác quản lý sân của bạn đã được gửi thành công. Admin đang xem xét và xác minh thông tin địa điểm trước khi kích hoạt bảng điều khiển quản lý sân chính thức.
             </p>
           </div>
 
@@ -242,7 +239,9 @@ export default function TenantPendingPage() {
           <div className="bg-slate-900/80 rounded-2xl border border-white/10 p-5 sm:p-6 mb-6">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
-                <span className="text-base">⏳</span>
+                <svg className="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
                 <span>THỜI HẠN XÉT DUYỆT TỐI ĐA (7 NGÀY)</span>
               </div>
               <span className="text-[11px] text-slate-400">
@@ -294,18 +293,19 @@ export default function TenantPendingPage() {
 
             {/* CẢNH BÁO QUY ĐỊNH 7 NGÀY */}
             <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-xs flex items-start gap-2.5">
-              <span className="text-base leading-none">⚠️</span>
+              <svg className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
               <p className="leading-relaxed">
-                <strong>Quy định tự động xóa:</strong> Nếu sau <strong>7 ngày</strong> kể từ khi gửi hồ sơ mà chưa được Super Admin phê duyệt, tài khoản và thông tin cụm sân sẽ <strong>tự động bị hủy và xóa khỏi hệ thống</strong> để giải phóng dữ liệu.
+                <strong>Quy định tự động xóa:</strong> Nếu sau <strong>7 ngày</strong> kể từ khi gửi hồ sơ mà chưa được Admin phê duyệt, tài khoản và thông tin cụm sân sẽ <strong>tự động bị hủy và xóa khỏi hệ thống</strong> để giải phóng dữ liệu.
               </p>
             </div>
           </div>
 
           {/* CHI TIẾT THÔNG TIN HỒ SƠ ĐÃ GỬI */}
           <div className="bg-white/5 rounded-2xl border border-white/10 p-5 mb-6">
-            <h3 className="text-xs font-black uppercase text-emerald-400 tracking-wider mb-3 flex items-center gap-1.5">
-              <span>📋</span>
-              <span>Thông tin cụm sân đã đăng ký</span>
+            <h3 className="text-xs font-black uppercase text-emerald-400 tracking-wider mb-3">
+              Thông tin cụm sân đã đăng ký
             </h3>
 
             <div className="grid sm:grid-cols-2 gap-3.5 text-xs">
@@ -341,7 +341,9 @@ export default function TenantPendingPage() {
               disabled={checking}
               className="flex-1 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-60 text-white font-bold py-3.5 px-6 rounded-xl text-sm transition shadow-[0_4px_20px_rgba(16,185,129,0.35)] active:scale-[0.99] flex items-center justify-center gap-2"
             >
-              <span className={`text-base ${checking ? 'animate-spin' : ''}`}>🔄</span>
+              {checking && (
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              )}
               <span>{checking ? 'Đang kiểm tra kết quả...' : 'Kiểm tra lại trạng thái duyệt'}</span>
             </button>
 
@@ -357,39 +359,40 @@ export default function TenantPendingPage() {
           {/* TRƯỜNG HỢP BỊ TỪ CHỐI */}
           {status === 'REJECTED' && (
             <div className="mt-5 p-4 rounded-2xl bg-red-500/20 border border-red-500/40 text-red-200 text-xs space-y-2">
-              <div className="font-bold text-sm flex items-center gap-2 text-red-300">
-                <span>❌</span>
-                <span>Hồ sơ đăng ký đã bị từ chối phê duyệt!</span>
+              <div className="font-bold text-sm text-red-300">
+                Hồ sơ đăng ký đã bị từ chối phê duyệt!
               </div>
               <p>
-                Rất tiếc, hồ sơ cụm sân của bạn không đạt yêu cầu xét duyệt của Super Admin. Vui lòng liên hệ bộ phận hỗ trợ hoặc đăng ký lại cụm sân mới.
+                Rất tiếc, hồ sơ cụm sân của bạn không đạt yêu cầu xét duyệt của Admin. Vui lòng liên hệ bộ phận hỗ trợ hoặc đăng ký lại cụm sân mới.
               </p>
             </div>
           )}
         </div>
 
-        {/* THÔNG TIN HỖ TRỢ / HOTLINE SUPER ADMIN */}
+        {/* THÔNG TIN HỖ TRỢ / HOTLINE ADMIN */}
         <div className="mt-6 bg-white/[0.04] backdrop-blur-md rounded-2xl border border-white/10 p-4 text-xs flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-300">
           <div className="flex items-center gap-2.5">
-            <span className="text-xl">📞</span>
+            <svg className="w-5 h-5 text-emerald-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+            </svg>
             <div>
               <span className="font-bold text-white">Cần duyệt hồ sơ gấp?</span>
               <span className="text-slate-400 block text-[11px]">
-                Liên hệ Super Admin trong giờ làm việc (08:00 - 22:00)
+                Liên hệ Admin trong giờ làm việc (08:00 - 22:00)
               </span>
             </div>
           </div>
           <div className="flex items-center gap-4 text-xs font-mono font-bold">
             <span className="text-emerald-400">Hotline: 0988.888.888</span>
             <span className="text-slate-500">|</span>
-            <span className="text-emerald-400">admin@badminton-saas.com</span>
+            <span className="text-emerald-400">admin@badmintonhub.vn</span>
           </div>
         </div>
       </main>
 
       {/* FOOTER */}
       <footer className="max-w-4xl w-full mx-auto text-center pt-6 border-t border-white/10 text-[11px] text-slate-400 relative z-10">
-        © 2026 Badminton SaaS Platform. Nền tảng Quản trị & Đặt lịch Cầu lông Đa cụm sân.
+        © 2026 BadmintonHub. Nền tảng Đặt lịch & Quản lý Cụm Sân Cầu Lông.
       </footer>
     </div>
   );

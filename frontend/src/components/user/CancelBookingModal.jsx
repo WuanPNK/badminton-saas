@@ -17,7 +17,7 @@ export default function CancelBookingModal({
           Yêu cầu Hủy sân & Hoàn 100% tiền
         </h3>
         <p className="text-xs text-slate-600">
-          Đơn sẽ chuyển sang trạng thái <strong>PENDING_REFUND</strong> để Lễ tân chuyển khoản hoàn lại{' '}
+          Đơn sẽ chuyển sang trạng thái <strong>Chờ hoàn tiền</strong> để Lễ tân chuyển khoản hoàn lại{' '}
           <strong className="text-emerald-700">
             {Number(booking.final_price).toLocaleString()} ₫
           </strong>{' '}
@@ -54,7 +54,7 @@ export default function CancelBookingModal({
             onChange={(e) =>
               setRefundBank({ ...refundBank, refundAccountName: e.target.value })
             }
-            className="w-full px-3 py-2 border rounded-xl text-sm uppercase"
+            className="w-full px-3 py-2 border rounded-xl text-sm"
           />
         </div>
         <div className="flex justify-end gap-2 pt-2">

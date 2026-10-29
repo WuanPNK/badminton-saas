@@ -8,7 +8,6 @@ export default function VenueDetailModal({
   renderDiscountLabel,
   calcStudentHourlyPreview,
   formatDaysOfWeek,
-  gallery,
 }) {
   if (!selectedVenue && !loadingVenue) return null;
 
@@ -39,7 +38,7 @@ export default function VenueDetailModal({
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="bg-emerald-500/30 border border-emerald-400/40 text-emerald-200 text-[11px] font-bold px-2.5 py-0.5 rounded-full">
-                        🏸 Cầu lông • Quận {selectedVenue.tenant.district}
+                        Cầu lông • Quận {selectedVenue.tenant.district}
                       </span>
                       <span className="bg-amber-400 text-slate-950 text-xs font-extrabold px-2.5 py-0.5 rounded-full">
                         ★ {Number(selectedVenue.tenant.avg_rating) > 0 ? selectedVenue.tenant.avg_rating : 'Mới'} ({selectedVenue.reviews.length} đánh giá)
@@ -49,7 +48,7 @@ export default function VenueDetailModal({
                       {selectedVenue.tenant.name}
                     </h2>
                     <p className="text-xs text-emerald-100 mt-0.5">
-                      📍 {selectedVenue.tenant.address} • 🕒 Mở cửa: 05:00 - 22:00 • 📞 {selectedVenue.tenant.phone_contact}
+                      {selectedVenue.tenant.address} • Giờ mở cửa: 05:00 - 22:00 • Hotline: {selectedVenue.tenant.phone_contact}
                     </p>
                   </div>
                 </div>
@@ -65,10 +64,10 @@ export default function VenueDetailModal({
 
             <div className="flex border-b border-slate-200 bg-slate-50 px-6 overflow-x-auto text-xs font-extrabold">
               {[
-                { id: 'PRICING', label: '💰 Bảng giá & Dịch vụ' },
-                { id: 'IMAGES', label: '🖼️ Hình ảnh sân' },
-                { id: 'RULES', label: '📋 Điều khoản & Quy định' },
-                { id: 'REVIEWS', label: `⭐ Đánh giá (${selectedVenue.reviews.length})` },
+                { id: 'PRICING', label: 'Bảng giá & Dịch vụ' },
+                { id: 'IMAGES', label: 'Hình ảnh sân' },
+                { id: 'RULES', label: 'Điều khoản & Quy định' },
+                { id: 'REVIEWS', label: `Đánh giá (${selectedVenue.reviews.length})` },
               ].map((t) => (
                 <button
                   key={t.id}
@@ -90,7 +89,7 @@ export default function VenueDetailModal({
                   <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl flex flex-wrap justify-between items-center gap-2 text-xs">
                     <div>
                       <span className="font-extrabold text-emerald-950">
-                        🎓 Chính sách Học sinh / Sinh viên tại sân:{' '}
+                        Chính sách Học sinh / Sinh viên tại sân:{' '}
                       </span>
                       <span className="text-emerald-800 font-semibold">
                         {renderDiscountLabel(
@@ -133,7 +132,7 @@ export default function VenueDetailModal({
                                 className="border-b border-slate-200 hover:bg-slate-50"
                               >
                                 <td className="p-3 font-extrabold text-slate-900 border-r border-slate-200">
-                                  Sân {rule.court_type}
+                                  Sân {rule.court_type === 'VIP' ? 'VIP' : 'Tiêu chuẩn'}
                                 </td>
                                 <td className="p-3 font-semibold text-slate-700 border-r border-slate-200">
                                   {formatDaysOfWeek(rule.days_of_week)}
@@ -178,7 +177,7 @@ export default function VenueDetailModal({
                                 : 'bg-emerald-100 text-emerald-800'
                             }`}
                           >
-                            {c.is_under_maintenance ? 'Bảo trì' : c.type}
+                            {c.is_under_maintenance ? 'Bảo trì' : c.type === 'VIP' ? 'VIP' : 'Tiêu chuẩn'}
                           </span>
                         </div>
                       ))}
@@ -188,25 +187,30 @@ export default function VenueDetailModal({
               )}
 
               {venueDetailTab === 'IMAGES' && (
-                <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {((selectedVenue.tenant.images && selectedVenue.tenant.images.length > 0)
-                    ? selectedVenue.tenant.images
-                    : gallery
-                  ).map((imgUrl, i) => (
-                    <div
-                      key={i}
-                      className="rounded-2xl overflow-hidden border border-slate-200 h-48 bg-slate-100 shadow-sm"
-                    >
-                      <img
-                        src={imgUrl}
-                        alt={`Hình ảnh sân ${i + 1}`}
-                        className="w-full h-full object-cover hover:scale-105 transition duration-300"
-                        onError={(e) => {
-                          e.target.src = 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80';
-                        }}
-                      />
+                <div>
+                  {selectedVenue.tenant.images && selectedVenue.tenant.images.length > 0 ? (
+                    <div className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {selectedVenue.tenant.images.map((imgUrl, i) => (
+                        <div
+                          key={i}
+                          className="rounded-2xl overflow-hidden border border-slate-200 h-48 bg-slate-100 shadow-sm"
+                        >
+                          <img
+                            src={imgUrl}
+                            alt={`Hình ảnh sân ${i + 1}`}
+                            className="w-full h-full object-cover hover:scale-105 transition duration-300"
+                            onError={(e) => {
+                              e.target.src = 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80';
+                            }}
+                          />
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  ) : (
+                    <div className="text-center py-12 text-slate-400 text-xs border border-dashed rounded-2xl">
+                      Chủ sân chưa đăng tải hình ảnh cho cụm sân này.
+                    </div>
+                  )}
                 </div>
               )}
 

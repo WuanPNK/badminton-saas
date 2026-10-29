@@ -4,7 +4,7 @@ const bookingController = require('./bookingController');
 const { verifyToken, optionalAuth, authorizeRoles } = require('../../middlewares/authMiddleware');
 const { verifyActiveTenant } = require('../../middlewares/tenantMiddleware');
 
-// Xem lưới lịch Timeline theo ngày của 1 cụm sân (Dùng cho Khách, Khách vãng lai, và Lễ tân)
+// Xem lưới lịch Timeline theo ngày của 1 cụm sân (Dùng cho Khách đặt online, Sự kiện, và Lễ tân)
 router.get('/timeline/:tenantId', bookingController.getDailyTimeline);
 
 // Khách xem trước giá tiền (Tự động áp dụng ưu đãi nếu là Sinh viên VERIFIED)
@@ -19,7 +19,7 @@ router.delete('/:id/cancel-pending', verifyToken, authorizeRoles('USER'), bookin
 // Khách xem lịch sử đặt sân của mình
 router.get('/my-bookings', verifyToken, authorizeRoles('USER'), bookingController.getMyBookings);
 
-// Lễ tân / Chủ sân tạo vé Vãng lai (WALK_IN) hoặc Sự kiện (EVENT)
+// Lễ tân / Chủ sân tạo vé Sự kiện / Giải đấu (EVENT) - Đặt được nhiều sân, giảm 20% khi > 3 sân
 router.post(
   '/staff-create',
   verifyToken,
@@ -44,6 +44,25 @@ router.post(
   authorizeRoles('TENANT_ADMIN', 'STAFF'),
   verifyActiveTenant,
   bookingController.quickCheckIn
+);
+
+
+// Lễ tân / Chủ sân kiểm tra và xem trước tiền gia hạn ca chơi
+router.post(
+  '/preview-extend',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN', 'STAFF'),
+  verifyActiveTenant,
+  bookingController.previewExtendBooking
+);
+
+// Lễ tân / Chủ sân gia hạn giờ chơi 1 chạm (+30p hoặc +1h)
+router.post(
+  '/extend',
+  verifyToken,
+  authorizeRoles('TENANT_ADMIN', 'STAFF'),
+  verifyActiveTenant,
+  bookingController.extendBooking
 );
 
 module.exports = router;

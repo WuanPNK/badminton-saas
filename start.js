@@ -3,7 +3,7 @@ const path = require('path');
 const { spawn, execSync } = require('child_process');
 
 console.log('\n====================================================================');
-console.log('🏸 TỰ ĐỘNG KIỂM TRA MÔI TRƯỜNG & KHỞI CHẠY BADMINTON SAAS');
+console.log('🏸 TỰ ĐỘNG KIỂM TRA MÔI TRƯỜNG & KHỞI CHẠY BADMINTONHUB');
 console.log('====================================================================\n');
 
 const backendDir = path.join(__dirname, 'backend');
@@ -35,24 +35,78 @@ if (!fs.existsSync(frontendModules)) {
 }
 
 // 4. Tự động tạo DB & nạp dữ liệu mẫu CSDL lần đầu nếu chưa nạp
-const dbFlagFile = path.join(backendDir, '.db_initialized');
-if (!fs.existsSync(dbFlagFile)) {
+async function initDatabaseIfNeeded() {
+  const dbFlagFile = path.join(backendDir, '.db_initialized');
+  if (fs.existsSync(dbFlagFile)) return;
+
   console.log('🗄️  [4/4] Phát hiện khởi chạy lần đầu, đang tự động nạp CSDL & dữ liệu mẫu...');
   try {
-    execSync('node src/scripts/initDb.js', { cwd: backendDir, stdio: 'inherit', shell: true });
-    fs.writeFileSync(dbFlagFile, new Date().toISOString(), 'utf8');
-    console.log('✓ Tự động nạp CSDL và dữ liệu mẫu hoàn tất 100%!\n');
+    let dbUrl = '';
+    if (fs.existsSync(backendEnv)) {
+      const envLines = fs.readFileSync(backendEnv, 'utf8').split('\n');
+      for (const line of envLines) {
+        if (line.trim().startsWith('DATABASE_URL=')) {
+          dbUrl = line.split('=')[1]?.trim();
+          break;
+        }
+      }
+    }
+
+    if (!dbUrl) {
+      console.warn('⚠️  Không tìm thấy DATABASE_URL trong file .env');
+      return;
+    }
+
+    const { Pool } = require(path.join(backendModules, 'pg'));
+
+    // Tự động tạo cơ sở dữ liệu nếu chưa tồn tại
+    try {
+      const url = new URL(dbUrl);
+      const targetDb = url.pathname.replace(/^\//, '');
+      if (targetDb) {
+        const defaultUrl = new URL(dbUrl);
+        defaultUrl.pathname = '/postgres';
+        const defaultPool = new Pool({ connectionString: defaultUrl.toString() });
+        const checkRes = await defaultPool.query(
+          'SELECT 1 FROM pg_database WHERE datname = $1',
+          [targetDb]
+        );
+        if (checkRes.rows.length === 0) {
+          console.log(`[CSDL] Đang tự động tạo mới cơ sở dữ liệu "${targetDb}"...`);
+          await defaultPool.query(`CREATE DATABASE "${targetDb}"`);
+          console.log(`[CSDL] Đã tạo thành công cơ sở dữ liệu "${targetDb}".`);
+        }
+        await defaultPool.end();
+      }
+    } catch (e) {
+      // Bỏ qua nếu user không có quyền trên database postgres mặc định
+    }
+
+    // Nạp schema.sql và seed_data.sql
+    const pool = new Pool({ connectionString: dbUrl });
+    try {
+      const schemaFile = path.join(backendDir, 'schema.sql');
+      const seedFile = path.join(backendDir, 'seed_data.sql');
+
+      if (fs.existsSync(schemaFile)) {
+        console.log('⚡ Đang tự động nạp cấu trúc bảng (schema.sql)...');
+        await pool.query(fs.readFileSync(schemaFile, 'utf8'));
+      }
+
+      if (fs.existsSync(seedFile)) {
+        console.log('⚡ Đang tự động nạp dữ liệu mẫu ban đầu (seed_data.sql)...');
+        await pool.query(fs.readFileSync(seedFile, 'utf8'));
+      }
+
+      fs.writeFileSync(dbFlagFile, new Date().toISOString(), 'utf8');
+      console.log('✓ Khởi tạo cơ sở dữ liệu và dữ liệu mẫu thành công 100%!\n');
+    } finally {
+      await pool.end();
+    }
   } catch (err) {
-    console.error('⚠️  Không thể tự động nạp CSDL. Vui lòng đảm bảo PostgreSQL đang bật.');
+    console.error('⚠️  Không thể tự động nạp CSDL:', err.message);
   }
 }
-
-// 5. Khởi chạy đồng thời Backend và Frontend
-console.log('====================================================================');
-console.log('🚀 ĐANG KHỞI CHẠY ĐỒNG THỜI SERVER VÀ GIAO DIỆN WEB:');
-console.log('👉 Giao diện Web:   http://localhost:5173');
-console.log('👉 Server Backend:  http://localhost:5000');
-console.log('====================================================================\n');
 
 function runProcess(cmd, args, cwd, label, color) {
   const isWin = process.platform === 'win32';
@@ -75,17 +129,29 @@ function runProcess(cmd, args, cwd, label, color) {
   return child;
 }
 
-const backendProcess = runProcess('npm', ['run', 'dev'], backendDir, '[BACKEND] ', '\x1b[36m');
-const frontendProcess = runProcess('npm', ['run', 'dev'], frontendDir, '[FRONTEND]', '\x1b[32m');
+async function start() {
+  await initDatabaseIfNeeded();
 
-function cleanup() {
-  console.log('\n🛑 Đang dừng toàn bộ hệ thống...');
-  try {
-    if (backendProcess) backendProcess.kill();
-    if (frontendProcess) frontendProcess.kill();
-  } catch (e) {}
-  process.exit(0);
+  console.log('====================================================================');
+  console.log('🚀 ĐANG KHỞI CHẠY ĐỒNG THỜI SERVER VÀ GIAO DIỆN WEB:');
+  console.log('👉 Giao diện Web:   http://localhost:5173');
+  console.log('👉 Server Backend:  http://localhost:5000');
+  console.log('====================================================================\n');
+
+  const backendProcess = runProcess('npm', ['run', 'dev'], backendDir, '[BACKEND] ', '\x1b[36m');
+  const frontendProcess = runProcess('npm', ['run', 'dev'], frontendDir, '[FRONTEND]', '\x1b[32m');
+
+  function cleanup() {
+    console.log('\n🛑 Đang dừng toàn bộ hệ thống...');
+    try {
+      if (backendProcess) backendProcess.kill();
+      if (frontendProcess) frontendProcess.kill();
+    } catch (e) {}
+    process.exit(0);
+  }
+
+  process.on('SIGINT', cleanup);
+  process.on('SIGTERM', cleanup);
 }
 
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
+start();

@@ -5,7 +5,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import AuthPage from './pages/auth/AuthPage';
 import UserMarketplace from './pages/user/UserMarketplace';
 import TenantBookingPage from './pages/user/TenantBookingPage';
-import SuperAdminDashboard from './pages/superAdmin/SuperAdminDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import TenantDashboard from './pages/tenant/TenantDashboard';
 import TenantPendingPage from './pages/tenant/TenantPendingPage';
 import StaffDashboard from './pages/staff/StaffDashboard';
@@ -41,12 +41,12 @@ export default function App() {
           <Route path="/login" element={<AuthPage />} />
           <Route path="/auth" element={<Navigate to="/login" replace />} />
 
-          {/* Luồng Super Admin */}
+          {/* Luồng Admin */}
           <Route
-            path="/super-admin"
+            path="/admin"
             element={
-              <ProtectedRoute allowedRoles={['SUPER_ADMIN']}>
-                <SuperAdminDashboard />
+              <ProtectedRoute allowedRoles={['ADMIN', 'SUPER_ADMIN']}>
+                <AdminDashboard />
               </ProtectedRoute>
             }
           />
@@ -80,6 +80,7 @@ export default function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/super-admin" element={<Navigate to="/admin" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

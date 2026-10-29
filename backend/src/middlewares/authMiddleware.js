@@ -31,7 +31,7 @@ const optionalAuth = (req, res, next) => {
   next();
 };
 
-// Middleware kiểm tra quyền (SUPER_ADMIN, TENANT_ADMIN, STAFF, USER)
+// Middleware kiểm tra quyền (ADMIN, TENANT_ADMIN, STAFF, USER)
 const authorizeRoles = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {

@@ -4,16 +4,24 @@ const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(() => {
+    // Xóa sạch localStorage cũ để không lưu phiên làm việc vĩnh viễn
     try {
-      const savedUser = localStorage.getItem('user');
-      const token = localStorage.getItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+    } catch {
+      // ignore
+    }
+
+    try {
+      const savedUser = sessionStorage.getItem('user');
+      const token = sessionStorage.getItem('token');
       if (savedUser && token && savedUser !== 'undefined') {
         return JSON.parse(savedUser);
       }
     } catch (e) {
-      console.error('Lỗi phân giải dữ liệu người dùng từ localStorage:', e);
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
+      console.error('Lỗi phân giải dữ liệu người dùng từ sessionStorage:', e);
+      sessionStorage.removeItem('user');
+      sessionStorage.removeItem('token');
     }
     return null;
   });
@@ -21,18 +29,20 @@ export const AuthProvider = ({ children }) => {
   const [loading] = useState(false);
 
   const login = (userData, token) => {
-    localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('token', token);
+    sessionStorage.setItem('user', JSON.stringify(userData));
+    sessionStorage.setItem('token', token);
     setUser(userData);
   };
 
   const updateUser = (updatedUserData) => {
     const merged = { ...user, ...updatedUserData };
-    localStorage.setItem('user', JSON.stringify(merged));
+    sessionStorage.setItem('user', JSON.stringify(merged));
     setUser(merged);
   };
 
   const logout = () => {
+    sessionStorage.removeItem('user');
+    sessionStorage.removeItem('token');
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     setUser(null);

@@ -26,19 +26,19 @@ const sendOTPEmail = async (toEmail, otpCode, purpose = 'REGISTER') => {
   const isReset = purpose === 'RESET_PASSWORD';
 
   const subject = isReset
-    ? '[Badminton SaaS] Mã OTP khôi phục mật khẩu của bạn'
-    : '[Badminton SaaS] Mã OTP xác thực đăng ký tài khoản';
+    ? '[BadmintonHub] Mã OTP khôi phục mật khẩu của bạn'
+    : '[BadmintonHub] Mã OTP xác thực đăng ký tài khoản';
 
   const titleText = isReset
     ? 'Khôi Phục Mật Khẩu Tài Khoản'
     : 'Xác Thực Email Tạo Tài Khoản Mới';
 
   const introText = isReset
-    ? 'Bạn nhận được email này vì đã gửi yêu cầu đặt lại mật khẩu cho tài khoản sử dụng email này tại nền tảng <strong>Badminton SaaS</strong>.'
-    : 'Chào mừng bạn đến với <strong>Badminton SaaS Portal</strong>! Vui lòng sử dụng mã xác thực dưới đây để hoàn tất việc đăng ký tài khoản.';
+    ? 'Bạn nhận được email này vì đã gửi yêu cầu đặt lại mật khẩu cho tài khoản sử dụng email này tại nền tảng <strong>BadmintonHub</strong>.'
+    : 'Chào mừng bạn đến với <strong>BadmintonHub</strong>! Vui lòng sử dụng mã xác thực dưới đây để hoàn tất việc đăng ký tài khoản.';
 
   const mailOptions = {
-    from: `"Badminton SaaS Portal" <${process.env.EMAIL_USER}>`,
+    from: `"BadmintonHub" <${process.env.EMAIL_USER}>`,
     to: toEmail,
     subject: subject,
     html: `
@@ -58,7 +58,7 @@ const sendOTPEmail = async (toEmail, otpCode, purpose = 'REGISTER') => {
                 <tr>
                   <td style="background: linear-gradient(135deg, #059669 0%, #065f46 100%); padding: 28px 30px; text-align: center;">
                     <div style="font-size: 32px; margin-bottom: 6px;">🏸</div>
-                    <h1 style="color: #ffffff; font-size: 20px; font-weight: 800; margin: 0; letter-spacing: 0.5px;">BADMINTON SAAS PORTAL</h1>
+                    <h1 style="color: #ffffff; font-size: 20px; font-weight: 800; margin: 0; letter-spacing: 0.5px;">BADMINTONHUB</h1>
                     <p style="color: #a7f3d0; font-size: 12px; margin: 4px 0 0 0; text-transform: uppercase; letter-spacing: 1px;">Hệ Thống Đặt Lịch Sân & Quản Trị Đa Cụm Sân</p>
                   </td>
                 </tr>
@@ -98,7 +98,7 @@ const sendOTPEmail = async (toEmail, otpCode, purpose = 'REGISTER') => {
                 <tr>
                   <td style="background-color: #f8fafc; padding: 18px 30px; text-align: center; border-top: 1px solid #e2e8f0;">
                     <p style="color: #94a3b8; font-size: 11px; margin: 0; line-height: 1.5;">
-                      Email tự động được gửi từ nền tảng <strong>Badminton SaaS Portal</strong>.<br>
+                      Email tự động được gửi từ nền tảng <strong>BadmintonHub</strong>.<br>
                       Vui lòng không phản hồi trực tiếp thư này.
                     </p>
                   </td>
@@ -157,10 +157,10 @@ const sendBookingTicketEmail = async ({
     });
     const dateStr = new Date(booking.booking_date).toLocaleDateString('vi-VN');
 
-    const subject = `[Badminton SaaS] Xác nhận vé đặt sân #${booking.booking_code} - ${tenant.name}`;
+    const subject = `[BadmintonHub] Xác nhận vé đặt sân #${booking.booking_code} - ${tenant.name}`;
 
     const mailOptions = {
-      from: `"Badminton SaaS Portal" <${process.env.EMAIL_USER}>`,
+      from: `"BadmintonHub" <${process.env.EMAIL_USER}>`,
       to: toEmail,
       subject: subject,
       html: `
@@ -263,7 +263,7 @@ const sendBookingTicketEmail = async ({
                   <tr>
                     <td style="background-color: #f8fafc; padding: 20px 30px; text-align: center; border-top: 1px solid #e2e8f0;">
                       <p style="color: #94a3b8; font-size: 11px; margin: 0; line-height: 1.6;">
-                        Email tự động xác nhận đơn đặt từ <strong>Badminton SaaS Ecosystem</strong>.<br>
+                        Email tự động xác nhận đơn đặt từ <strong>BadmintonHub</strong>.<br>
                         Chúc bạn có một buổi thi đấu cầu lông tuyệt vời và tràn đầy năng lượng!
                       </p>
                     </td>

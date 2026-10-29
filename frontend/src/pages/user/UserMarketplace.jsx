@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import axiosClient from '../../api/axiosClient';
@@ -10,15 +10,22 @@ import VenueDetailModal from '../../components/user/VenueDetailModal';
 import CancelBookingModal from '../../components/user/CancelBookingModal';
 import ReviewModal from '../../components/user/ReviewModal';
 import AccountSettings from '../../components/user/AccountSettings';
+import NotificationBell from '../../components/common/NotificationBell';
+import { isValidVNPhone } from '../../utils/validators';
 
-const COURT_GALLERY = [
-  'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1521537634581-0dced2fee2ef?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1599474924187-334a4ae5bd3c?auto=format&fit=crop&w=900&q=80',
-  'https://images.unsplash.com/photo-1546519638-68e109498ffc?auto=format&fit=crop&w=900&q=80',
+const ALL_DISTRICTS = [
+  'Cầu Giấy',
+  'Đống Đa',
+  'Thanh Xuân',
+  'Hai Bà Trưng',
+  'Hoàng Mai',
+  'Nam Từ Liêm',
+  'Bắc Từ Liêm',
+  'Ba Đình',
+  'Tây Hồ',
+  'Long Biên',
+  'Hà Đông',
 ];
-
-const POPULAR_DISTRICTS = ['Tất cả', 'Cầu Giấy', 'Đống Đa', 'Thanh Xuân', 'Nam Từ Liêm', 'Hai Bà Trưng', 'Hoàng Mai'];
 
 export default function UserMarketplace() {
   const { user, updateUser, logout } = useAuth();
@@ -30,7 +37,9 @@ export default function UserMarketplace() {
   const [tenants, setTenants] = useState([]);
   const [myBookings, setMyBookings] = useState([]);
   const [bookingFilter, setBookingFilter] = useState('ALL');
-  const [district, setDistrict] = useState('');
+  const [selectedDistricts, setSelectedDistricts] = useState([]);
+  const [isDistrictDropdownOpen, setIsDistrictDropdownOpen] = useState(false);
+  const districtDropdownRef = useRef(null);
   const [search, setSearch] = useState('');
 
   const [selectedVenue, setSelectedVenue] = useState(null);
@@ -67,7 +76,10 @@ export default function UserMarketplace() {
   const fetchMarketplace = async () => {
     try {
       const res = await axiosClient.get('/tenant/marketplace', {
-        params: { district, search },
+        params: {
+          districts: selectedDistricts.length > 0 ? selectedDistricts.join(',') : undefined,
+          search: search.trim() || undefined,
+        },
       });
       setTenants(res.data.tenants || []);
     } catch (err) {
@@ -88,7 +100,34 @@ export default function UserMarketplace() {
   useEffect(() => {
     fetchMarketplace();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [district]);
+  }, [selectedDistricts]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        districtDropdownRef.current &&
+        !districtDropdownRef.current.contains(event.target)
+      ) {
+        setIsDistrictDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    // Nếu tài khoản quản lý (Chủ sân, Lễ tân, Admin) truy cập vào trang chủ /,
+    // tự động đăng xuất theo yêu cầu để tránh nhầm lẫn giao diện
+    if (user && ['TENANT_ADMIN', 'STAFF', 'ADMIN'].includes(user.role)) {
+      logout();
+    }
+  }, [user]);
+
+  const handleToggleDistrict = (d) => {
+    setSelectedDistricts((prev) =>
+      prev.includes(d) ? prev.filter((item) => item !== d) : [...prev, d]
+    );
+  };
 
   useEffect(() => {
     if (activeTab === 'MY_BOOKINGS' || (activeTab === 'ACCOUNT' && accountSection === 'BOOKINGS')) {
@@ -198,6 +237,13 @@ export default function UserMarketplace() {
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
+    if (profileForm.phone && !isValidVNPhone(profileForm.phone)) {
+      setAccountMsg({
+        type: 'error',
+        text: 'Số điện thoại không đúng định dạng Việt Nam (10 số, bắt đầu bằng 03, 05, 07, 08, 09)!',
+      });
+      return;
+    }
     setSavingAccount(true);
     setAccountMsg({ type: '', text: '' });
     try {
@@ -246,14 +292,14 @@ export default function UserMarketplace() {
     if (user?.studentStatus === 'VERIFIED') {
       return (
         <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-3 py-1 rounded-full text-xs font-bold">
-          🎓 Học sinh / Sinh viên (Đã xác thực)
+          Học sinh / Sinh viên (Đã xác thực)
         </span>
       );
     }
     if (user?.studentStatus === 'PENDING_APPROVAL') {
       return (
         <span className="bg-amber-100 text-amber-800 border border-amber-300 px-3 py-1 rounded-full text-xs font-semibold">
-          ⏳ Thẻ HSSV đang chờ duyệt
+          Thẻ HSSV đang chờ duyệt
         </span>
       );
     }
@@ -309,23 +355,21 @@ export default function UserMarketplace() {
             onClick={() => setActiveTab('MARKETPLACE')}
             className="flex items-center gap-3 cursor-pointer group"
           >
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-xl shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
-              🏸
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
+              BH
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-lg sm:text-xl font-black tracking-tight bg-gradient-to-r from-white via-slate-100 to-emerald-300 bg-clip-text text-transparent">
-                  Badminton SaaS
+                  BadmintonHub
                 </h1>
-                <span className="hidden sm:inline-block bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase px-2 py-0.5 rounded-full">
-                  BWF Portal
-                </span>
+                
               </div>
               <p className="text-xs text-slate-400">
                 {user ? (
                   <>Xin chào, <strong className="text-emerald-300">{user.fullName}</strong></>
                 ) : (
-                  'Sàn đặt lịch sân cầu lông trực tuyến & đa cụm sân'
+                  'Hệ thống đặt sân cầu lông trực tuyến'
                 )}
               </p>
             </div>
@@ -343,7 +387,6 @@ export default function UserMarketplace() {
                       : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
-                  <span>🏟️</span>
                   <span>Khám phá Sân</span>
                 </button>
 
@@ -355,7 +398,6 @@ export default function UserMarketplace() {
                       : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
-                  <span>📅</span>
                   <span>Lịch của tôi ({myBookings.length})</span>
                 </button>
 
@@ -367,16 +409,15 @@ export default function UserMarketplace() {
                       : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
                 >
-                  <span>👤</span>
                   <span>Tài khoản</span>
                 </button>
 
-                {user.role === 'SUPER_ADMIN' && (
+                {(user.role === 'ADMIN' || user.role === 'SUPER_ADMIN') && (
                   <button
-                    onClick={() => navigate('/super-admin')}
+                    onClick={() => navigate('/admin')}
                     className="px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 transition shadow-sm cursor-pointer"
                   >
-                    👑 Admin
+                    Admin
                   </button>
                 )}
                 {user.role === 'TENANT_ADMIN' && (
@@ -384,7 +425,7 @@ export default function UserMarketplace() {
                     onClick={() => navigate('/tenant')}
                     className="px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 transition shadow-sm cursor-pointer"
                   >
-                    🏟️ Quản lý
+                    Quản lý Sân
                   </button>
                 )}
                 {user.role === 'STAFF' && (
@@ -392,9 +433,11 @@ export default function UserMarketplace() {
                     onClick={() => navigate('/staff')}
                     className="px-3 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-500 hover:to-amber-600 text-slate-950 transition shadow-sm cursor-pointer"
                   >
-                    🧑‍💼 Lễ tân
+                    Lễ tân
                   </button>
                 )}
+
+                <NotificationBell />
 
                 <button
                   onClick={handleLogout}
@@ -430,30 +473,101 @@ export default function UserMarketplace() {
             <div className="bg-white p-4 sm:p-5 rounded-3xl shadow-sm border border-slate-200/90 space-y-3.5">
               <div className="flex flex-wrap gap-3 items-center">
                 <div className="flex-1 min-w-[260px] relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                  <svg className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
                   <input
                     type="text"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && fetchMarketplace()}
-                    placeholder="Tìm theo tên cụm sân (Đông Đô, Thái Hà...) hoặc địa chỉ..."
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-2xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
+                    placeholder="Tìm tên sân hoặc địa chỉ..."
+                    className="w-full pl-11 pr-4 py-3 bg-slate-50 hover:bg-slate-100/70 border border-slate-200 rounded-2xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500 transition"
                   />
                 </div>
 
-                <select
-                  value={district}
-                  onChange={(e) => setDistrict(e.target.value)}
-                  className="px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
-                >
-                  <option value="">📍 Tất cả Quận / Khu vực</option>
-                  <option value="Cầu Giấy">Quận Cầu Giấy</option>
-                  <option value="Đống Đa">Quận Đống Đa</option>
-                  <option value="Thanh Xuân">Quận Thanh Xuân</option>
-                  <option value="Hai Bà Trưng">Quận Hai Bà Trưng</option>
-                  <option value="Hoàng Mai">Quận Hoàng Mai</option>
-                  <option value="Nam Từ Liêm">Quận Nam Từ Liêm</option>
-                </select>
+                {/* DROPDOWN CHỌN QUẬN / KHU VỰC (ẢNH 5: MULTI-SELECT DẠNG PILLS, CÁI ĐƯỢC CHỌN HIỆN XANH) */}
+                <div className="relative" ref={districtDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsDistrictDropdownOpen(!isDistrictDropdownOpen)}
+                    className={`px-4 py-3 border rounded-2xl text-sm font-bold flex items-center justify-between gap-2.5 transition cursor-pointer min-w-[210px] ${
+                      selectedDistricts.length > 0
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-800'
+                        : 'bg-slate-50 hover:bg-slate-100/80 border-slate-200 text-slate-700'
+                    }`}
+                  >
+                    <span className="truncate">
+                      {selectedDistricts.length === 0
+                        ? 'Tất cả Quận / Khu vực'
+                        : selectedDistricts.length === 1
+                        ? `Quận ${selectedDistricts[0]}`
+                        : `${selectedDistricts.length} Quận đã chọn`}
+                    </span>
+                    <svg
+                      className={`w-4 h-4 text-slate-500 shrink-0 transition-transform duration-200 ${
+                        isDistrictDropdownOpen ? 'rotate-180' : ''
+                      }`}
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+
+                  {/* POPUP MENU CHỌN KHU VỰC DẠNG PILLS (ẢNH 5: BẤM 1 LẦN CHỌN, BẤM LẠI BỎ CHỌN) */}
+                  {isDistrictDropdownOpen && (
+                    <div className="absolute right-0 sm:left-0 mt-2 z-30 bg-white rounded-2xl shadow-xl border border-slate-200/90 p-4 w-72 sm:w-80 animate-scale-up space-y-3">
+                      <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                        <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                          Chọn Khu vực ({selectedDistricts.length})
+                        </span>
+                        {selectedDistricts.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedDistricts([])}
+                            className="text-[11px] font-bold text-red-500 hover:text-red-700 underline cursor-pointer"
+                          >
+                            Bỏ chọn hết
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap gap-1.5 max-h-56 overflow-y-auto pr-1">
+                        {ALL_DISTRICTS.map((d) => {
+                          const isSelected = selectedDistricts.includes(d);
+                          return (
+                            <button
+                              key={d}
+                              type="button"
+                              onClick={() => handleToggleDistrict(d)}
+                              className={`px-3 py-1.5 rounded-full text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
+                                isSelected
+                                  ? 'bg-emerald-600 text-white shadow-sm'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                              }`}
+                            >
+                              <span>{d}</span>
+                              {isSelected && <span className="text-white/90 text-[10px] font-black">✓</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-100 flex justify-between items-center text-[11px] text-slate-400 font-medium">
+                        <span>Bấm để chọn / bỏ chọn</span>
+                        <button
+                          type="button"
+                          onClick={() => setIsDistrictDropdownOpen(false)}
+                          className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition cursor-pointer"
+                        >
+                          Đóng
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 <button
                   onClick={fetchMarketplace}
@@ -463,47 +577,55 @@ export default function UserMarketplace() {
                 </button>
               </div>
 
-              {/* QUICK DISTRICT PILLS (BẤM 1 CHẠM LỌC QUẬN) */}
-              <div className="flex items-center gap-2 pt-2 border-t border-slate-100 overflow-x-auto pb-1">
-                <span className="text-xs font-extrabold text-slate-400 whitespace-nowrap uppercase tracking-wider text-[11px]">
-                  Khu vực nhanh:
-                </span>
-                <div className="flex items-center gap-1.5 flex-nowrap">
-                  {POPULAR_DISTRICTS.map((d) => {
-                    const isSelected = (d === 'Tất cả' && !district) || district === d;
-                    return (
+              {/* CHỈ HIỆN KHU VỰC ĐƯỢC CHỌN (ẢNH 4: KHÔNG HIỆN TOÀN BỘ ĐỂ TRÁNH RỐI MẮT KHI CÓ NHIỀU SÂN) */}
+              {selectedDistricts.length > 0 && (
+                <div className="flex items-center gap-2 pt-2.5 border-t border-slate-100 overflow-x-auto pb-0.5">
+                  <span className="text-xs font-extrabold text-slate-400 whitespace-nowrap uppercase tracking-wider text-[11px]">
+                    Khu vực đã chọn:
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {selectedDistricts.map((d) => (
                       <button
                         key={d}
                         type="button"
-                        onClick={() => setDistrict(d === 'Tất cả' ? '' : d)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-600 text-white shadow-sm'
-                            : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                        }`}
+                        onClick={() => handleToggleDistrict(d)}
+                        className="px-3 py-1 rounded-full text-xs font-bold bg-emerald-600 text-white shadow-sm flex items-center gap-1.5 hover:bg-emerald-700 transition cursor-pointer"
+                        title="Bấm để bỏ chọn khu vực này"
                       >
-                        {d === 'Tất cả' ? '🌐 Tất cả' : `📍 ${d}`}
+                        <span>Quận {d}</span>
+                        <span className="text-white/80 hover:text-white font-extrabold text-[10px]">✕</span>
                       </button>
-                    );
-                  })}
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDistricts([])}
+                      className="text-[11px] font-bold text-slate-400 hover:text-red-600 underline ml-1 cursor-pointer"
+                    >
+                      Xóa tất cả
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* TIÊU ĐỀ BỘ ĐẾM SÂN */}
             <div className="flex justify-between items-center px-1">
               <h3 className="text-sm font-extrabold text-slate-700 uppercase tracking-wider">
-                {district ? `Cụm sân tại Quận ${district}` : 'Tất cả cụm sân đang mở cửa'} ({tenants.length})
+                {selectedDistricts.length === 0
+                  ? 'Tất cả cụm sân đang mở cửa'
+                  : selectedDistricts.length === 1
+                  ? `Cụm sân tại Quận ${selectedDistricts[0]}`
+                  : `Cụm sân tại ${selectedDistricts.map((d) => `Quận ${d}`).join(', ')}`} ({tenants.length})
               </h3>
-              <span className="text-xs text-slate-400">
-                Cập nhật theo thời gian thực
-              </span>
+
             </div>
 
             {/* DANH SÁCH THẺ SÂN */}
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {tenants.map((t, index) => {
-                const coverImg = COURT_GALLERY[index % COURT_GALLERY.length];
+                const coverImg = (t.images && t.images.length > 0)
+                  ? t.images[0]
+                  : 'https://images.unsplash.com/photo-1626224583764-f87db24ac4ea?auto=format&fit=crop&w=900&q=80';
                 return (
                   <VenueCard
                     key={t.id}
@@ -518,7 +640,6 @@ export default function UserMarketplace() {
 
               {tenants.length === 0 && (
                 <div className="col-span-3 bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm space-y-3">
-                  <div className="text-4xl">🏸</div>
                   <h4 className="text-base font-extrabold text-slate-800">
                     Không tìm thấy cụm sân nào phù hợp
                   </h4>
@@ -527,7 +648,7 @@ export default function UserMarketplace() {
                   </p>
                   <button
                     onClick={() => {
-                      setDistrict('');
+                      setSelectedDistricts([]);
                       setSearch('');
                       fetchMarketplace();
                     }}
@@ -546,10 +667,10 @@ export default function UserMarketplace() {
             <div className="bg-white p-4 rounded-2xl border border-slate-200 flex flex-wrap justify-between items-center gap-3">
               <div>
                 <h2 className="text-base font-extrabold text-slate-900">
-                  Danh sách Lịch đã đặt, Hoàn tiền & Đánh giá
+                  Lịch đặt của tôi
                 </h2>
                 <p className="text-xs text-slate-500">
-                  Hủy lịch trước giờ chơi tối thiểu 24h để được hoàn tiền 100% qua ngân hàng
+                  Hỗ trợ hủy và hoàn tiền 100% trước giờ chơi tối thiểu 24 tiếng
                 </p>
               </div>
 
@@ -557,7 +678,7 @@ export default function UserMarketplace() {
                 {[
                   { id: 'ALL', label: 'Tất cả' },
                   { id: 'CONFIRMED', label: 'Đã xác nhận' },
-                  { id: 'COMPLETED', label: 'Đã hoàn tất (Đánh giá)' },
+                  { id: 'COMPLETED', label: 'Đã hoàn thành' },
                   { id: 'PENDING_REFUND', label: 'Chờ hoàn tiền' },
                   { id: 'REFUNDED', label: 'Đã hoàn tiền' },
                 ].map((f) => (
@@ -597,13 +718,13 @@ export default function UserMarketplace() {
                       </span>
                     </div>
                     <p className="text-xs text-slate-600">
-                      🕒 Thời gian: <strong>{new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} → {new Date(b.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} ({new Date(b.start_time).toLocaleDateString('vi-VN')})</strong>
+                      Thời gian: <strong>{new Date(b.start_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} → {new Date(b.end_time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false })} ({new Date(b.start_time).toLocaleDateString('vi-VN')})</strong>
                     </p>
                     <p className="text-sm font-extrabold text-emerald-700">
                       Tổng thanh toán: {Number(b.final_price).toLocaleString()} ₫
                       {b.is_student_applied && (
                         <span className="ml-2 text-xs bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-semibold">
-                          🎓 Đã giảm HSSV (-{Number(b.discount_applied).toLocaleString()} ₫)
+                          Đã giảm HSSV (-{Number(b.discount_applied).toLocaleString()} ₫)
                         </span>
                       )}
                     </p>
@@ -621,7 +742,19 @@ export default function UserMarketplace() {
                           : 'bg-slate-100 text-slate-700'
                       }`}
                     >
-                      {b.status}
+                      {b.status === 'CONFIRMED'
+                        ? 'Đã xác nhận'
+                        : b.status === 'COMPLETED'
+                        ? 'Đã hoàn thành'
+                        : b.status === 'PENDING_REFUND'
+                        ? 'Chờ hoàn tiền'
+                        : b.status === 'REFUNDED'
+                        ? 'Đã hoàn tiền'
+                        : b.status === 'CANCELLED'
+                        ? 'Đã hủy'
+                        : b.status === 'PENDING'
+                        ? 'Chờ thanh toán'
+                        : b.status}
                     </span>
 
                     {b.status === 'CONFIRMED' && (
@@ -639,21 +772,21 @@ export default function UserMarketplace() {
                           onClick={() => setReviewModalBooking(b)}
                           className="bg-amber-500 hover:bg-amber-600 text-slate-950 px-3.5 py-2 rounded-xl text-xs font-extrabold transition shadow-sm cursor-pointer"
                         >
-                          ★ Viết đánh giá sân
+                          Viết đánh giá sân
                         </button>
                       ) : (
                         <span
                           className="text-[11px] text-slate-400 font-medium bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200"
                           title="Bạn chỉ có thể đánh giá cụm sân khi đã thực tế đến sân check-in"
                         >
-                          🚫 Chưa check-in (Không thể đánh giá)
+                          Chưa check-in (Chưa thể đánh giá)
                         </span>
                       )
                     )}
 
                     {b.has_reviewed && (
                       <span className="text-xs text-emerald-700 font-bold bg-emerald-50 px-3 py-1.5 rounded-xl">
-                        ✓ Đã đánh giá
+                        Đã đánh giá
                       </span>
                     )}
                   </div>
@@ -702,7 +835,6 @@ export default function UserMarketplace() {
         renderDiscountLabel={renderDiscountLabel}
         calcStudentHourlyPreview={calcStudentHourlyPreview}
         formatDaysOfWeek={formatDaysOfWeek}
-        gallery={COURT_GALLERY}
       />
 
       <CancelBookingModal

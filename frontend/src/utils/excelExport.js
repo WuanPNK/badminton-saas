@@ -74,11 +74,11 @@ export const exportTenantRevenueToExcel = async (exportData) => {
     [], // Dòng trống
     ['--- 1. BẢNG TỔNG HỢP CHỈ SỐ DOANH THU TOÀN SÂN ---'],
     ['Chỉ số tài chính', 'Giá trị', 'Đơn vị tính', 'Ghi chú nghiệp vụ kế toán'],
-    ['Tổng doanh thu toàn sân', summary.totalRevenue || 0, 'VNĐ', 'Bao gồm tiền thuê sân và doanh thu bán hàng POS'],
+    ['Tổng doanh thu toàn sân', summary.totalRevenue || 0, 'VNĐ', 'Bao gồm tiền thuê sân và doanh thu bán hàng tại quầy'],
     ['Doanh thu tiền thuê sân', summary.courtRevenue || 0, 'VNĐ', 'Tiền sân đã thu 100% qua chuyển khoản VietQR'],
     ['Số lượt đặt sân thành công', summary.paidBookingsCount || 0, 'Lượt ca', 'Số ca thi đấu đã xác nhận và hoàn thành'],
-    ['Doanh thu bán hàng POS', summary.posRevenue || 0, 'VNĐ', 'Nước giải khát, cầu thi đấu, quấn cán & thuê vợt'],
-    ['Số hóa đơn bán hàng POS', summary.posOrdersCount || 0, 'Hóa đơn', 'Hóa đơn bán lẻ ghi nhận tại quầy lễ tân'],
+    ['Doanh thu bán hàng tại quầy', summary.posRevenue || 0, 'VNĐ', 'Nước giải khát, cầu thi đấu, quấn cán & thuê vợt'],
+    ['Số hóa đơn bán hàng tại quầy', summary.posOrdersCount || 0, 'Hóa đơn', 'Hóa đơn bán lẻ ghi nhận tại quầy lễ tân'],
     ['Số đơn chờ hoàn tiền (Hủy 24h)', summary.pendingRefundCount || 0, 'Đơn hủy', 'Khách thao tác hủy trước giờ chơi ít nhất 24 tiếng'],
     ['Tổng tiền đã hoàn trả cho khách', summary.totalRefundedAmount || 0, 'VNĐ', 'Đã chuyển khoản hoàn tiền thành công'],
     [], // Dòng trống
@@ -139,7 +139,7 @@ export const exportTenantRevenueToExcel = async (exportData) => {
       b.booking_code,
       b.court_name,
       b.court_type === 'VIP' ? 'Sân VIP' : 'Tiêu chuẩn',
-      b.customer_name || 'Khách vãng lai',
+      b.customer_name || 'Khách sự kiện',
       b.customer_phone || '',
       b.customer_email || '',
       formatDate(b.booking_date),
@@ -150,7 +150,7 @@ export const exportTenantRevenueToExcel = async (exportData) => {
       Number(b.discount_applied || 0),
       Number(b.final_price || 0),
       b.is_student_applied ? 'CÓ (HSSV)' : 'Không',
-      b.booking_type === 'VISUAL' ? 'Khách đặt qua App' : 'Vãng lai tại quầy',
+      b.booking_type === 'VISUAL' ? 'Khách đặt qua App' : 'Vé Sự Kiện / Giải Đấu',
       b.status === 'CONFIRMED'
         ? 'ĐÃ THANH TOÁN'
         : b.status === 'COMPLETED'
@@ -177,35 +177,42 @@ export const exportTenantRevenueToExcel = async (exportData) => {
       [
         'STT',
         'Mã Hóa Đơn (UUID)',
+        'Trạng Thái',
         'Nhân Viên Phụ Trách',
         'Sân Thi Đấu Liên Quan',
         'Mã Đặt Sân Ghép Cùng',
         'Chi Tiết Mặt Hàng Đã Bán',
         'Tổng Tiền Hóa Đơn (VNĐ)',
         'Phương Thức Thanh Toán',
-        'Ghi Chú Đơn',
+        'Ghi Chú / Lý Do Hủy',
         'Thời Gian Thanh Toán',
       ],
     ];
 
     posOrders.forEach((po, idx) => {
+      const isCancelled = po.status === 'CANCELLED';
+      const statusText = isCancelled
+        ? `ĐÃ HỦY (${po.cancel_reason || 'Nhập sai / Hủy đơn'})`
+        : 'HOÀN TẤT';
+
       sheet3Data.push([
         idx + 1,
         po.id,
+        statusText,
         po.staff_name || 'Lễ tân',
         po.court_name || 'Tại quầy lễ tân',
         po.booking_code || 'Không ghép',
         po.items_detail || 'Đơn dịch vụ POS',
         Number(po.total_amount || 0),
         po.payment_method === 'CASH' ? 'Tiền mặt tại quầy' : 'Chuyển khoản VietQR',
-        po.note || '',
+        isCancelled ? `Lý do: ${po.cancel_reason || 'Không rõ'} (bởi ${po.cancelled_by_name || 'Nhân viên'})` : (po.note || ''),
         formatDateTime(po.created_at),
       ]);
     });
 
     const ws3 = XLSX.utils.aoa_to_sheet(sheet3Data);
     ws3['!cols'] = autoFitColumns(sheet3Data);
-    XLSX.utils.book_append_sheet(workbook, ws3, 'Hóa Đơn POS');
+    XLSX.utils.book_append_sheet(workbook, ws3, 'Hóa Đơn Bán Hàng');
   }
 
   // Tên file tải về sạch đẹp, chuẩn hoá tiếng Việt không dấu
@@ -250,8 +257,8 @@ export const exportTenantRevenueToCSV = (exportData) => {
     idx + 1,
     `"${b.booking_code}"`,
     `"${b.court_name}"`,
-    `"${b.court_type}"`,
-    `"${b.customer_name || 'Khách vãng lai'}"`,
+    `"${b.court_type === 'VIP' ? 'Sân VIP' : 'Tiêu chuẩn'}"`,
+    `"${b.customer_name || 'Khách sự kiện'}"`,
     `"${b.customer_phone || ''}"`,
     `"${formatDate(b.booking_date)}"`,
     `"${formatDateTime(b.start_time)}"`,
@@ -259,8 +266,8 @@ export const exportTenantRevenueToCSV = (exportData) => {
     Number(b.original_price || 0),
     Number(b.discount_applied || 0),
     Number(b.final_price || 0),
-    b.is_student_applied ? 'YES' : 'NO',
-    `"${b.status}"`,
+    b.is_student_applied ? 'CÓ (HSSV)' : 'Không',
+    `"${b.status === 'CONFIRMED' ? 'ĐÃ THANH TOÁN' : b.status === 'COMPLETED' ? 'HOÀN THÀNH' : b.status === 'PENDING_REFUND' ? 'CHỜ HOÀN TIỀN' : b.status === 'REFUNDED' ? 'ĐÃ HOÀN TIỀN' : b.status}"`,
     `"${formatDateTime(b.created_at)}"`,
   ]);
 
@@ -281,10 +288,10 @@ export const exportTenantRevenueToCSV = (exportData) => {
 };
 
 // ============================================================================
-// 3. XUẤT EXCEL DÀNH CHO SUPER ADMIN (SAAS PLATFORM REVENUE & CONTRACTS)
+// 3. XUẤT EXCEL DÀNH CHO ADMIN (SAAS PLATFORM REVENUE & CONTRACTS)
 // ============================================================================
 
-export const exportSuperAdminRevenueToExcel = async (exportData) => {
+export const exportAdminRevenueToExcel = async (exportData) => {
   if (!exportData) return;
 
   const XLSX = await import('xlsx');
@@ -303,20 +310,20 @@ export const exportSuperAdminRevenueToExcel = async (exportData) => {
   // SHEET 1: TỔNG QUAN TÀI CHÍNH NỀN TẢNG SAAS (Platform Overview)
   // --------------------------------------------------------------------------
   const sheet1Data = [
-    ['BÁO CÁO DOANH THU NỀN TẢNG SAAS & ĐỐI SOÁT HỢP ĐỒNG ĐỐI TÁC'],
-    ['Nền tảng: Badminton SaaS Multi-Tenant Platform'],
+    ['BÁO CÁO DOANH THU NỀN TẢNG & ĐỐI SOÁT HỢP ĐỒNG ĐỐI TÁC'],
+    ['Nền tảng: BadmintonHub'],
     [`Thời điểm trích xuất dữ liệu: ${formatDateTime(exportData.exportedAt || new Date().toISOString())}`],
-    ['Đơn vị lập báo cáo: Ban Quản Trị Hệ Thống (Super Admin)'],
+    ['Đơn vị lập báo cáo: Ban Quản Trị Hệ Thống (Admin)'],
     [],
-    ['--- 1. CÁC CHỈ SỐ DOANH THU SAAS NỀN TẢNG ---'],
+    ['--- 1. CÁC CHỈ SỐ DOANH THU NỀN TẢNG ---'],
     ['Chỉ số tài chính', 'Giá trị', 'Đơn vị tính', 'Ghi chú đối soát'],
-    ['Tổng Doanh Thu SaaS Tích Lũy', summary.total_saas_revenue || 0, 'VNĐ', 'Tổng thu từ phí thuê phần mềm từ các cụm sân'],
+    ['Tổng Doanh Thu Phần Mềm Tích Lũy', summary.total_saas_revenue || 0, 'VNĐ', 'Tổng thu từ phí thuê phần mềm từ các cụm sân'],
     ['Doanh Thu Tháng Này', summary.this_month_revenue || 0, 'VNĐ', 'Hợp đồng kích hoạt / gia hạn trong tháng hiện tại'],
     ['Số Hợp Đồng Ký Trong Tháng', summary.this_month_subscriptions || 0, 'Hợp đồng', 'Giao dịch thu phí thành công'],
     ['Tổng Số Hợp Đồng Đã Ký', summary.total_subscriptions || 0, 'Hợp đồng', 'Toàn bộ hợp đồng từ ngày vận hành sàn'],
     ['Giá Trị Trung Bình Hợp Đồng (ARPU)', Math.round(summary.average_deal || 0), 'VNĐ / hợp đồng', 'Doanh thu trung bình trên mỗi hợp đồng thuê'],
     [],
-    ['--- 2. CƠ CẤU DOANH THU THEO GÓI CƯỚC SAAS ---'],
+    ['--- 2. CƠ CẤU DOANH THU THEO GÓI CƯỚC ---'],
     ['STT', 'Tên Gói Cước', 'Hạng Gói', 'Số Hợp Đồng Kích Hoạt', 'Tổng Doanh Thu (VNĐ)', 'Tỷ Trọng (%)'],
   ];
 
@@ -335,7 +342,7 @@ export const exportSuperAdminRevenueToExcel = async (exportData) => {
 
   sheet1Data.push([]);
   sheet1Data.push(['--- 3. XẾP HẠNG ĐÓNG GÓP DOANH THU CÁC CỤM SÂN ---']);
-  sheet1Data.push(['Hạng', 'Tên Cụm Sân', 'Quận / Khu Vực', 'Địa Chỉ', 'Số Lần Thanh Toán', 'Tổng Phí SaaS Đã Đóng (VNĐ)', 'Hạn Dùng Hiện Tại']);
+  sheet1Data.push(['Hạng', 'Tên Cụm Sân', 'Quận / Khu Vực', 'Địa Chỉ', 'Số Lần Thanh Toán', 'Tổng Phí Đã Đóng (VNĐ)', 'Hạn Dùng Hiện Tại']);
 
   tenantRanking.forEach((t, idx) => {
     sheet1Data.push([
@@ -351,7 +358,7 @@ export const exportSuperAdminRevenueToExcel = async (exportData) => {
 
   const ws1 = XLSX.utils.aoa_to_sheet(sheet1Data);
   ws1['!cols'] = autoFitColumns(sheet1Data);
-  XLSX.utils.book_append_sheet(workbook, ws1, 'Tổng Quan Tài Chính SaaS');
+  XLSX.utils.book_append_sheet(workbook, ws1, 'Tổng Quan Tài Chính Nền Tảng');
 
   // --------------------------------------------------------------------------
   // SHEET 2: SỔ CÁI HỢP ĐỒNG THUÊ PHẦN MỀM (Subscriptions Ledger)
@@ -422,15 +429,15 @@ export const exportSuperAdminRevenueToExcel = async (exportData) => {
     XLSX.utils.book_append_sheet(workbook, ws3, 'Doanh Thu Theo Tháng');
   }
 
-  const fileName = `Bao_Cao_Doanh_Thu_SaaS_Nen_Tang_${currentDateStr}.xlsx`;
+  const fileName = `Bao_Cao_Doanh_Thu_Nen_Tang_${currentDateStr}.xlsx`;
   XLSX.writeFile(workbook, fileName);
 };
 
 // ============================================================================
-// 4. XUẤT CSV CHO SUPER ADMIN
+// 4. XUẤT CSV CHO ADMIN
 // ============================================================================
 
-export const exportSuperAdminRevenueToCSV = (exportData) => {
+export const exportAdminRevenueToCSV = (exportData) => {
   if (!exportData || !exportData.subscriptions) return;
 
   const { subscriptions = [] } = exportData;
@@ -463,7 +470,7 @@ export const exportSuperAdminRevenueToCSV = (exportData) => {
     Number(s.amount_paid || 0),
     `"${formatDate(s.start_date)}"`,
     `"${formatDate(s.end_date)}"`,
-    `"${s.payment_status}"`,
+    `"${s.payment_status === 'PAID' ? 'ĐÃ THU 100%' : s.payment_status === 'PENDING' ? 'CHỜ THANH TOÁN' : s.payment_status === 'REFUNDED' ? 'ĐÃ HOÀN TIỀN' : s.payment_status}"`,
   ]);
 
   const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
@@ -472,8 +479,12 @@ export const exportSuperAdminRevenueToCSV = (exportData) => {
   const link = document.createElement('a');
 
   link.setAttribute('href', url);
-  link.setAttribute('download', `So_Cai_Hop_Dong_SaaS_${currentDateStr}.csv`);
+  link.setAttribute('download', `So_Cai_Hop_Dong_${currentDateStr}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
 };
+
+// Backward compatibility aliases
+export const exportSuperAdminRevenueToExcel = exportAdminRevenueToExcel;
+export const exportSuperAdminRevenueToCSV = exportAdminRevenueToCSV;

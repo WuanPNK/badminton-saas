@@ -1,3 +1,4 @@
+const { notifyTenantStaffAndOwner } = require('../notification/notificationService');
 const db = require('../../config/db');
 
 // 1. KHÁCH HÀNG GỬI ĐÁNH GIÁ SÂN (CHỈ CHO PHÉP ĐƠN ĐÃ COMPLETED)

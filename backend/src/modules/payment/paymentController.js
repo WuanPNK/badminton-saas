@@ -1,6 +1,7 @@
 const db = require('../../config/db');
 const { sendBookingTicketEmail } = require('../../config/mailer');
 const { notifyBookingUpdate } = require('../../config/socket');
+const { createNotification, notifyTenantStaffAndOwner } = require('../notification/notificationService');
 
 // 1. LẤY THÔNG TIN THANH TOÁN & SINH MÃ VIETQR ĐỘNG CHO ĐƠN ĐẶT SÂN
 exports.getBookingPaymentInfo = async (req, res) => {
@@ -87,6 +88,24 @@ exports.mockConfirmPayment = async (req, res) => {
       courtId: confirmedBooking.court_id,
     });
 
+    // Gửi thông báo In-App cho Khách hàng
+    createNotification({
+      userId: confirmedBooking.user_id,
+      tenantId: confirmedBooking.tenant_id,
+      type: 'BOOKING_SUCCESS',
+      title: 'Đặt sân thành công!',
+      message: `Đơn đặt sân #${confirmedBooking.booking_code} đã thanh toán thành công. Chúc bạn có buổi chơi vui vẻ!`,
+      link: '/my-bookings',
+    });
+
+    // Gửi thông báo In-App cho Chủ sân và Lễ tân
+    notifyTenantStaffAndOwner(confirmedBooking.tenant_id, {
+      type: 'BOOKING_NEW',
+      title: 'Có lượt đặt sân mới',
+      message: `Khách hàng vừa đặt thành công đơn #${confirmedBooking.booking_code}. Vui lòng kiểm tra lịch.`,
+      link: '/staff',
+    });
+
     // Lấy thông tin chi tiết cụm sân, sân đấu và khách hàng để gửi Email vé đặt kèm QR Code
     (async () => {
       try {
@@ -162,7 +181,7 @@ exports.cancelBookingRequestRefund = async (req, res) => {
 
     if (booking.status !== 'CONFIRMED') {
       return res.status(400).json({
-        message: 'Chỉ những đơn đặt sân đã thanh toán (CONFIRMED) mới có thể yêu cầu hủy và hoàn tiền.'
+        message: 'Chỉ những đơn đặt sân đã thanh toán mới có thể yêu cầu hủy và hoàn tiền.'
       });
     }
 
@@ -198,6 +217,14 @@ exports.cancelBookingRequestRefund = async (req, res) => {
       booking: cancelledBooking,
       date: cancelledBooking.booking_date,
       courtId: cancelledBooking.court_id,
+    });
+
+    // Thông báo cho Chủ sân và Lễ tân xử lý chuyển khoản hoàn tiền
+    notifyTenantStaffAndOwner(cancelledBooking.tenant_id, {
+      type: 'REFUND_REQUEST',
+      title: 'Yêu cầu hoàn tiền trước 24h',
+      message: `Khách yêu cầu hoàn tiền cho đơn #${cancelledBooking.booking_code} (${Number(cancelledBooking.final_price).toLocaleString()} ₫). Vui lòng chuyển khoản hoàn tất.`,
+      link: '/staff',
     });
 
     res.json({
@@ -267,10 +294,24 @@ exports.markBookingRefunded = async (req, res) => {
       });
     }
 
+    const refundedBooking = result.rows[0];
+
+    // Gửi thông báo In-App cho Khách hàng
+    if (refundedBooking.user_id) {
+      createNotification({
+        userId: refundedBooking.user_id,
+        tenantId,
+        type: 'REFUND_SUCCESS',
+        title: 'Đã nhận hoàn tiền sân',
+        message: `Lễ tân đã hoàn tất chuyển khoản hoàn tiền cho đơn đặt sân #${refundedBooking.booking_code}. Vui lòng kiểm tra tài khoản ngân hàng của bạn.`,
+        link: '/my-bookings',
+      });
+    }
+
     res.json({
       success: true,
-      message: 'Đã xác nhận hoàn 100% tiền cho khách hàng thành công (REFUNDED)!',
-      booking: result.rows[0]
+      message: 'Đã xác nhận hoàn 100% tiền cho khách hàng thành công!',
+      booking: refundedBooking
     });
   } catch (error) {
     console.error(error);

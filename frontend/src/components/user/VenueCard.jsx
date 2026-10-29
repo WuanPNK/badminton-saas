@@ -27,23 +27,20 @@ export default function VenueCard({
               <span>{Number(tenant.avg_rating) > 0 ? tenant.avg_rating : 'Mới'}</span>
               <span className="text-slate-400 font-normal text-[10px]">({tenant.total_reviews})</span>
             </span>
-            <span className="bg-emerald-500/90 backdrop-blur text-white text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full shadow">
-              Đơn ngày
-            </span>
           </div>
 
           {/* BADGE QUẬN GÓC PHẢI TRÊN */}
           <span className="absolute top-3 right-3 bg-slate-950/75 backdrop-blur text-white text-xs font-bold px-3 py-1 rounded-full border border-white/10 shadow">
-            📍 Quận {tenant.district}
+            Quận {tenant.district}
           </span>
 
           {/* THÔNG TIN KHUNG GIỜ VÀ SỐ SÂN DƯỚI ĐÁY ẢNH */}
           <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center text-white text-xs">
-            <span className="font-semibold flex items-center gap-1 text-slate-200 drop-shadow">
-              <span>🕒</span> 05:00 - 22:00
+            <span className="font-semibold text-slate-200 drop-shadow">
+              05:00 - 22:00
             </span>
             <span className="bg-emerald-600/90 backdrop-blur text-white px-2.5 py-0.5 rounded-lg font-extrabold text-[11px] border border-emerald-400/30 shadow">
-              {tenant.total_courts} sân BWF
+              {tenant.total_courts} sân
             </span>
           </div>
         </div>
@@ -53,16 +50,15 @@ export default function VenueCard({
           <h3 className="text-base font-extrabold text-slate-900 group-hover:text-emerald-700 transition-colors line-clamp-1">
             {tenant.name}
           </h3>
-          <p className="text-xs text-slate-500 mt-1 line-clamp-1 flex items-center gap-1">
-            <span>🏠</span> {tenant.address}
+          <p className="text-xs text-slate-500 mt-1 line-clamp-1">
+            {tenant.address}
           </p>
-          <p className="text-xs text-slate-600 mt-1.5 flex items-center gap-1">
-            <span>📞</span> Hotline: <strong className="text-slate-800 font-bold">{tenant.phone_contact}</strong>
+          <p className="text-xs text-slate-600 mt-1.5">
+            Hotline: <strong className="text-slate-800 font-bold">{tenant.phone_contact}</strong>
           </p>
 
           {/* BADGE ƯU ĐÃI SINH VIÊN */}
-          <div className="mt-3.5 bg-emerald-50/90 border border-emerald-200 text-emerald-800 text-xs px-3 py-2 rounded-2xl font-bold flex items-center gap-2">
-            <span className="text-base">🎓</span>
+          <div className="mt-3.5 bg-emerald-50/90 border border-emerald-200 text-emerald-800 text-xs px-3 py-2 rounded-2xl font-bold flex items-center">
             <span className="truncate">{renderDiscountLabel(tenant.student_discount_type, tenant.student_discount_value)}</span>
           </div>
         </div>

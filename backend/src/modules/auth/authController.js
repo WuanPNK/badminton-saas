@@ -1,9 +1,11 @@
+const { notifyAdmins } = require('../notification/notificationService');
 const db = require('../../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
 const { sendOTPEmail } = require('../../config/mailer');
+const { isValidEmail, isValidVNPhone, formatVNPhone } = require('../../utils/validators');
 
 // Hàm phụ trợ: Lưu chuỗi Base64 từ Frontend thành file ảnh thực tế
 const saveBase64Image = (base64Data, req) => {
@@ -36,6 +38,12 @@ exports.sendOTP = async (req, res) => {
   }
 
   const cleanEmail = email.trim().toLowerCase();
+  if (!isValidEmail(cleanEmail)) {
+    return res.status(400).json({
+      message: 'Địa chỉ email không đúng định dạng (Ví dụ: ten@gmail.com hoặc ten@st.phenikaa-uni.edu.vn).'
+    });
+  }
+
   const validPurpose = purpose === 'RESET_PASSWORD' ? 'RESET_PASSWORD' : 'REGISTER';
 
   try {
@@ -90,6 +98,20 @@ exports.register = async (req, res) => {
   const cleanEmail = String(email || '').trim().toLowerCase();
   const cleanOtp = String(otpCode || '').trim();
 
+  if (!isValidEmail(cleanEmail)) {
+    return res.status(400).json({
+      message: 'Địa chỉ email không đúng định dạng (Ví dụ: ten@gmail.com hoặc ten@st.phenikaa-uni.edu.vn).'
+    });
+  }
+
+  if (!isValidVNPhone(phone)) {
+    return res.status(400).json({
+      message: 'Số điện thoại không hợp lệ. Vui lòng nhập đúng 10 chữ số di động VN (đầu 03, 05, 07, 08, 09).'
+    });
+  }
+
+  const cleanPhone = formatVNPhone(phone);
+
   try {
     const otpRes = await db.query(
       `SELECT * FROM otp_verifications 
@@ -129,7 +151,7 @@ exports.register = async (req, res) => {
 
     await db.query(`UPDATE otp_verifications SET is_used = TRUE WHERE id = $1`, [otpRes.rows[0].id]);
 
-    const userExist = await db.query(`SELECT id FROM users WHERE email = $1 OR phone = $2`, [cleanEmail, phone]);
+    const userExist = await db.query(`SELECT id FROM users WHERE email = $1 OR phone = $2`, [cleanEmail, cleanPhone]);
     if (userExist.rows.length > 0) {
       return res.status(400).json({ message: 'Email hoặc Số điện thoại đã được sử dụng.' });
     }
@@ -141,7 +163,7 @@ exports.register = async (req, res) => {
       const userRes = await db.query(
         `INSERT INTO users (role, full_name, email, phone, password_hash, is_email_verified)
          VALUES ('TENANT_ADMIN', $1, $2, $3, $4, TRUE) RETURNING id`,
-        [fullName, cleanEmail, phone, passwordHash]
+        [fullName, cleanEmail, cleanPhone, passwordHash]
       );
       const ownerId = userRes.rows[0].id;
 
@@ -152,10 +174,16 @@ exports.register = async (req, res) => {
       );
 
       await db.query(`UPDATE users SET tenant_id = $1 WHERE id = $2`, [tenantRes.rows[0].id, ownerId]);
+      notifyAdmins({
+        type: 'TENANT_PENDING',
+        title: 'Cụm sân mới đăng ký',
+        message: `Cụm sân "${tenantName}" (${district}) vừa đăng ký tài khoản và đang chờ phê duyệt.`,
+        link: '/admin',
+      });
 
       return res.status(201).json({
         success: true,
-        message: 'Đăng ký đối tác thành công. Cụm sân đang chờ Super Admin phê duyệt!'
+        message: 'Đăng ký đối tác thành công. Cụm sân đang chờ Admin phê duyệt!'
       });
     } else {
       const studentState = isStudent ? 'PENDING_APPROVAL' : 'NONE';
@@ -170,8 +198,8 @@ exports.register = async (req, res) => {
         VALUES ('USER', $1, $2, $3, $4, TRUE, $5, $6, $7, $8, $9) RETURNING id, role`,
         [
           fullName,
-          email,
-          phone,
+          cleanEmail,
+          cleanPhone,
           passwordHash,
           studentState,
           savedCardUrl,
@@ -234,7 +262,7 @@ exports.login = async (req, res) => {
       // 2. Nếu bị Khóa: Chặn đăng nhập
       if (status === 'LOCKED') {
         return res.status(403).json({
-          message: 'Tài khoản cụm sân của bạn hiện đang bị tạm khóa. Vui lòng liên hệ Super Admin.'
+          message: 'Tài khoản cụm sân của bạn hiện đang bị tạm khóa. Vui lòng liên hệ Admin.'
         });
       }
 
@@ -383,10 +411,18 @@ exports.updateProfile = async (req, res) => {
     return res.status(400).json({ message: 'Họ tên và Số điện thoại không được để trống.' });
   }
 
+  if (!isValidVNPhone(phone)) {
+    return res.status(400).json({
+      message: 'Số điện thoại không hợp lệ. Vui lòng nhập đúng 10 chữ số di động VN (đầu 03, 05, 07, 08, 09).'
+    });
+  }
+
+  const cleanPhone = formatVNPhone(phone);
+
   try {
     const phoneCheck = await db.query(
       `SELECT id FROM users WHERE phone = $1 AND id != $2`,
-      [phone, userId]
+      [cleanPhone, userId]
     );
     if (phoneCheck.rows.length > 0) {
       return res.status(400).json({ message: 'Số điện thoại này đã được sử dụng bởi tài khoản khác.' });
